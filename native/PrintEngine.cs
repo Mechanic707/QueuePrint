@@ -113,16 +113,9 @@ internal static class PrintEngine
                     documentIndex = page.DocumentIndex, fileId = page.FileId,
                     processedPages = page.ProcessedPagesBefore, contentPages = page.ContentPages, blank = page.Blank });
                 if (e.Graphics is null) throw new RequestException("PRINT_GRAPHICS_FAILED", "打印驱动没有提供绘图设备。");
-                e.Graphics.PageUnit = GraphicsUnit.Display;
-                e.Graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                e.Graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
                 if (!page.Blank)
                 {
-                    RectangleF area = e.PageSettings.PrintableArea;
-                    // Printer Graphics origin is its physical printable origin when OriginAtMargins=false.
-                    var available = new RectangleF(0, 0, area.Width, area.Height);
-                    RectangleF destination = Fit(page.Size, available, group.Options.Scale ?? "fit");
-                    plan.Sources[page.Path].Draw(e.Graphics, destination, page.Index, group.Options.Dpi ?? 300);
+                    PaintPage(e.Graphics, plan.Sources[page.Path], page.Size, page.Index, group.Options);
                 }
                 cursor++;
                 e.HasMorePages = cursor < group.Pages.Count;
@@ -161,6 +154,23 @@ internal static class PrintEngine
     {
         try { return PrinterApi.GetJobs(name).FirstOrDefault(j => j.DocumentName == document)?.JobId; }
         catch { return null; } // Some spoolers hide or immediately remove completed jobs.
+    }
+
+    // Shared by actual PrintPage and the virtual-output regression. No job is
+    // started here; callers supply the already-oriented page graphics.
+    internal static RectangleF PaintPage(Graphics graphics, IDocumentSource source, SizeF natural, int pageIndex, PrintOptions options)
+    {
+        var geometry = PrintGeometry.Read(graphics);
+        graphics.PageUnit = GraphicsUnit.Display;
+        graphics.PageScale = 1;
+        graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+        graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+        // OriginAtMargins=false puts (0,0) at the hardware printable origin.
+        // PrintableArea.X/Y describe its location on paper, not a second offset.
+        var available = new RectangleF(0, 0, geometry.PrintableArea.Width, geometry.PrintableArea.Height);
+        var destination = Fit(natural, available, options.Scale ?? "fit");
+        source.Draw(graphics, destination, pageIndex, options.Dpi ?? 300);
+        return destination;
     }
 
     private static RectangleF Fit(SizeF natural, RectangleF area, string mode)

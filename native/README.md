@@ -36,6 +36,8 @@ python .\tests\image_smoke.py
 | `jobs` | `printerName` | 当前 Windows 队列的数组；含 jobId、作业名、状态位/名称、驱动报告页数 |
 | `cancel` | `printerName`、`jobId` | 对该明确作业请求删除，返回 `{requested:true,jobId,physicalCompletionConfirmed:false}` |
 
+`page-layout` 与实际 `PrintPage` 从有效设备上下文读取纸张像素、可打印像素、硬件偏移及 DPI，再统一换算为物理尺寸，避免部分驱动在横向时对 `PageSettings.PrintableArea` 重复换向。
+
 纸型能力和文件尺寸均使用 `hundredths-inch`（百分之一英寸）。`inspect.kind` 为 `pdf` 或 `image`；宽高为第一页显示尺寸，PDF 基于页面尺寸，图片基于 EXIF 方向和嵌入 DPI。GIF 仅第一帧；TIFF 支持多页。图片无有效 DPI 时采用 96 DPI。文件限 PDF、PNG、JPG/JPEG、BMP、GIF、TIF/TIFF。
 
 `properties` 使用 Windows `DocumentProperties` 获取/验证 DEVMODE，并返回私有副本；不调用 SetPrinter，也不改全局默认设置。返回数据只用于对应打印机与当前驱动，切换打印机或更新驱动后应重新获取。ownerWindow 为可选十进制 HWND；默认 0。
@@ -94,9 +96,11 @@ jobId 通过唯一作业名查询 Windows 队列尽力获取，可能因为设�
 
 ## 本次已验证与硬件边界
 
-安全测试仅使用 tests/fixtures 中的自建文件，验证了 PDF 真正解析/栅格渲染、显式页面顺序、图片 DPI、双面补白、错误起纸断言、整套作业、不同设置连续段、每项失败隔离，以及重复路径/重复页的文件处理进度元数据、各份和作业的原始下标。可选打印机检查覆盖 Windows 枚举、队列只读查询和 DEVMODE 解码往返；报告仅保留在本地。进度事件时序依据 PrintPage 内的发送位置，安全测试不会执行 PrintDocument.Print()。
+`smoke.ps1` 与 `image_smoke.py` 仅使用 tests/fixtures 中的自建文件，验证了 PDF 真正解析/栅格渲染、显式页面顺序、图片 DPI、双面补白、错误起纸断言、整套作业、不同设置连续段、每项失败隔离，以及重复路径/重复页的文件处理进度元数据、各份和作业的原始下标。可选打印机检查覆盖 Windows 枚举、队列只读查询和 DEVMODE 解码往返；报告仅保留在本地。进度事件时序依据 PrintPage 内的发送位置；`smoke.ps1` 和 `image_smoke.py` 不执行 `PrintDocument.Print()`。
 
-**未执行任何 print、properties、cancel 请求。** 尚需实际试打验证驱动接收、打印质量、混合横纵页双面出纸、纸盒/装订等私有选项、缺纸状态与撤销效果。虚拟 PDF/XPS 打印机可能弹出保存位置窗口，无法据此承诺无交互打印。
+从仓库根目录运行 `npm.cmd run qa:print-output` 可验证实际打印绘图路径：仅向系统已安装的 **Microsoft Print to PDF** 提交带四角标记的自建 PDF/PNG，经过 `PrintDocument.Print()` 生成输出，再检查页面尺寸、方向及内容完整性。输出路径限定在 `.qa/`，不使用用户材料，不向实体设备提交作业；CI 缺少该驱动时明确跳过，不安装驱动或改用其他设备。
+
+**已验证虚拟 PDF 输出，尚未验证实体设备出纸。** 打印质量、混合横纵页双面出纸、纸盒/装订、缺纸状态与撤销效果需结合设备检查。普通交互流程下，虚拟 PDF/XPS 驱动仍可能弹出保存位置窗口；输出回归单独指定受控文件路径。
 
 ## 第三方依赖
 

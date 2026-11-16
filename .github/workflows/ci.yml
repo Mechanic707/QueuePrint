@@ -32,3 +32,5 @@ jobs:
       - name: Inspect, render, and verify plans without printing
         shell: powershell
         run: .\native\tests\smoke.ps1 -SkipPrinterChecks
+      - name: Verify output through the exact virtual PDF printer when available
+        run: npm.cmd run qa:print-output -- -AllowMissingVirtualPrinter

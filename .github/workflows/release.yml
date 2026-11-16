@@ -55,6 +55,9 @@ jobs:
       - name: Verify all packaged source and native components
         if: inputs.verify_existing != true
         run: node scripts/check-package.mjs
+      - name: Verify output through the exact virtual PDF printer when available
+        if: inputs.verify_existing != true
+        run: npm.cmd run qa:print-output -- -AllowMissingVirtualPrinter
       - name: Verify file progress in the packaged desktop UI
         if: inputs.verify_existing != true
         shell: pwsh

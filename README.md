@@ -8,7 +8,7 @@
 
 面向 Windows 的本地批量打印工具。混合导入 PDF 与图片，保留子文件夹分组，核对顺序后一次提交。
 
-[![Version](https://img.shields.io/badge/version-0.1.6-4564e8?style=flat-square)](https://github.com/Mechanic707/QueuePrint/releases)
+[![Version](https://img.shields.io/badge/version-0.1.7-4564e8?style=flat-square)](https://github.com/Mechanic707/QueuePrint/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078d4?style=flat-square)](#安装与启动)
 [![License](https://img.shields.io/badge/license-MIT-258a69?style=flat-square)](LICENSE)
 [![Tests](https://img.shields.io/badge/Node%20tests-80%20passed-258a69?style=flat-square)](#测试与验证)
@@ -70,17 +70,17 @@
 在 [Releases](https://github.com/Mechanic707/QueuePrint/releases/latest) 下载 Windows x64 免安装包：
 
 ```text
-QueuePrint-0.1.6-win-x64.exe
+QueuePrint-0.1.7-win-x64.exe
 ```
 
 打开即可使用。发布包已包含 Electron、本地打印助手及所需 .NET 运行时，使用软件无需安装 Node.js 或 .NET SDK。打印机需要先在 Windows 中安装相应驱动。
 
 | 下载项 | 说明 |
 | --- | --- |
-| [QueuePrint-0.1.6-win-x64.exe](https://github.com/Mechanic707/QueuePrint/releases/download/v0.1.6/QueuePrint-0.1.6-win-x64.exe) | Windows x64 免安装程序 |
-| [SHA256SUMS.txt](https://github.com/Mechanic707/QueuePrint/releases/download/v0.1.6/SHA256SUMS.txt) | 发行文件的 SHA-256 校验值 |
+| [QueuePrint-0.1.7-win-x64.exe](https://github.com/Mechanic707/QueuePrint/releases/download/v0.1.7/QueuePrint-0.1.7-win-x64.exe) | Windows x64 免安装程序 |
+| [SHA256SUMS.txt](https://github.com/Mechanic707/QueuePrint/releases/download/v0.1.7/SHA256SUMS.txt) | 发行文件的 SHA-256 校验值 |
 
-当前发行包未做代码签名，可通过 `Get-FileHash .\QueuePrint-0.1.6-win-x64.exe -Algorithm SHA256` 核对发布页中的校验值。
+当前发行包未做代码签名，可通过 `Get-FileHash .\QueuePrint-0.1.7-win-x64.exe -Algorithm SHA256` 核对发布页中的校验值。
 
 如使用目录版，运行 `win-unpacked/序印 QueuePrint.exe`，并保留整个 `win-unpacked` 目录。升级时先关闭旧版本，再运行新版本。
 
@@ -297,6 +297,7 @@ npm.cmd run dist
 | `npm.cmd run qa:progress` | 使用模拟进度验证文件级队列界面，不提交打印作业 |
 | `npm.cmd run qa:preview` | 检查自由缩放、文件切换、拖拽及预览缓存，不提交打印作业 |
 | `npm.cmd run qa:paper-preview` | 检查纸张排版、驱动边距、实际大小裁切、图片 DPI 与窗口自适应 |
+| `npm.cmd run qa:print-output` | 仅向 Microsoft Print to PDF 提交自建样例，核对实际输出的方向、尺寸与四角内容 |
 | `npm.cmd run qa:fixtures` | 在 `.qa/fixtures` 创建自建样例文件 |
 | `npm.cmd run qa:desktop` | 检查实际 Electron 导入、预览与确认界面 |
 | `npm.cmd run qa:enhancements` | 检查资源管理器拖放、去重及单文件多份 |
@@ -310,7 +311,7 @@ npm.cmd run dist
 npm.cmd test
 ```
 
-桌面检查使用自建文件和隔离偏好目录，验证真实 Electron 程序中的文件夹导入、PDF/图片预览、份数计算、确认窗口、拖放及自由缩放。文件进度检查使用模拟提交回执，检查每个文件结束时弹窗及清单位置稳定；纸张预览检查覆盖 A4/A3/A5、硬件边距、实际大小裁切、混合页方向、图片 DPI、最小窗口和驱动响应延迟。各检查均不向打印机提交真实作业。
+桌面检查使用自建文件和隔离偏好目录，验证真实 Electron 程序中的文件夹导入、PDF/图片预览、份数计算、确认窗口、拖放及自由缩放。文件进度检查使用模拟提交回执，检查每个文件结束时弹窗及清单位置稳定；纸张预览检查覆盖 A4/A3/A5、硬件边距、实际大小裁切、混合页方向、图片 DPI、最小窗口和驱动响应延迟。这些桌面检查不提交打印作业。另有 `qa:print-output`：通过真实 `PrintDocument.Print()` 向 **Microsoft Print to PDF** 提交自建 PDF/PNG，输出限定在 `.qa/` 内，检查实际生成页面的纸向、尺寸及四角标记；不向实体设备发送作业。
 
 Playwright 已作为开发依赖锁定，`npm ci` 后即可运行桌面检查，无需额外下载浏览器。检查会启动实际 Electron 窗口；完整确认流程测试需要 Windows 中至少安装一个打印队列，例如系统的虚拟 PDF 打印机。
 
@@ -321,6 +322,7 @@ npm.cmd run qa:enhancements
 npm.cmd run qa:progress
 npm.cmd run qa:preview
 npm.cmd run qa:paper-preview
+npm.cmd run qa:print-output
 npm.cmd run docs:screenshots
 ```
 
@@ -334,7 +336,7 @@ python -m pip install Pillow
 python native/tests/image_smoke.py
 ```
 
-验证范围为软件逻辑、实际桌面交互与离线渲染，**尚未执行实体打印验证**。首次连接实际设备时，建议先用少量材料核对纸向、双面翻边和输出质量。
+验证覆盖软件逻辑、桌面交互、离线渲染，以及系统虚拟 PDF 打印机的实际输出。**尚未执行实体设备出纸验证**。首次连接实际设备时，建议先用少量材料核对纸向、双面翻边和输出质量。
 
 ### GitHub Actions
 
@@ -342,6 +344,7 @@ python native/tests/image_smoke.py
 - 推送与 `package.json` 版本一致的 `v*` 标签时，自动构建 Windows 免安装包、生成校验值并上传到 Release。
 - 手动触发发布工作流会生成可下载的 Actions 构建产物；已有同名 Release 资产会保留。勾选 `verify_existing` 可只下载当前已发布版本进行回归验证。
 - 发布前会对比打包后的源码与全部原生文件，并运行最终便携 EXE 的重复启动回归，避免只验证目录版。
+- 虚拟输出回归仅使用已安装的 `Microsoft Print to PDF`；CI 环境没有该驱动时明确跳过，不自动安装或改用其他打印机。
 
 ## 项目结构
 
@@ -365,6 +368,12 @@ QueuePrint/
 界面将勾选、排序和属性交给核心模块生成明确计划；主进程核对已导入文件并有序提交；原生助手通过 Windows 打印 API 与 PDFium 完成逐页渲染。原生协议与命令说明见 [native/README.md](native/README.md)。
 
 ## 更新记录
+
+### v0.1.7
+
+- 修复 PDF 和图片在横向打印时缩在页面左下方、内容被裁切的问题。
+- 按当前打印设备上下文读取实际纸张、可打印区域和硬件偏移，修正横纵方向重复换算；打印与纸张预览使用同一套几何数据。
+- 新增 Microsoft Print to PDF 输出回归，经过真实打印绘图路径检查自建 PDF/PNG 的页面尺寸、方向与四角内容。
 
 ### v0.1.6
 
@@ -433,7 +442,7 @@ QueuePrint/
 
 ### 预览就是最终打印版式吗？
 
-预览展示源文件内容。最终纸张尺寸、方向、缩放、可打印边距和单双面由打印设置及驱动决定。选择“实际大小”时，超出可打印区域的部分可能被裁切。
+“打印纸张效果”按当前文件的有效纸张、方向、缩放和驱动可打印区域展示排版；“原文件内容”用于对照源 PDF 或图片。选择“实际大小”时，超出可打印区域的部分会被裁切。驱动的纸盒、装订和实体双面出纸效果仍需结合设备核对。
 
 ### 为什么换打印机后纸张或单双面设置改变了？
 

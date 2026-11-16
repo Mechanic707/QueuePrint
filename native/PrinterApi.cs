@@ -40,12 +40,14 @@ internal static class PrinterApi
     // properties dialog, changing system defaults, or creating a print job.
     internal static object PageLayout(string printerName, PrintOptions options)
     {
-        var page = Settings(printerName, options).DefaultPageSettings;
-        var bounds = page.Bounds;
-        var area = page.PrintableArea;
+        var settings = Settings(printerName, options);
+        var page = settings.DefaultPageSettings;
+        using var graphics = settings.CreateMeasurementGraphics(page);
+        var geometry = PrintGeometry.Read(graphics);
+        var area = geometry.PrintableArea;
         return new
         {
-            paper = new { width = bounds.Width, height = bounds.Height },
+            paper = new { width = geometry.Paper.Width, height = geometry.Paper.Height },
             printableArea = new { x = area.X, y = area.Y, width = area.Width, height = area.Height },
             landscape = page.Landscape, dimensionUnit = "hundredths-inch",
         };

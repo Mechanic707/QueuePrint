@@ -43,6 +43,21 @@ function Invoke-NativeReadOnly($Request, [switch]$AllowFailure) {
 
 function Assert-True([bool]$Value, [string]$Message) { if (-not $Value) { throw $Message } }
 
+function Measure-PrintableArea([string]$PrinterName, [bool]$Landscape) {
+    # This is an information/measurement DC only: no StartDoc or Print call.
+    # Independently compare GDI+ clipping against the native host's device caps.
+    $taskMeasurementSettings = New-Object System.Drawing.Printing.PrinterSettings
+    $taskMeasurementSettings.PrinterName = $PrinterName
+    $taskMeasurementSettings.DefaultPageSettings.Landscape = $Landscape
+    $taskMeasurementGraphics = $taskMeasurementSettings.CreateMeasurementGraphics($taskMeasurementSettings.DefaultPageSettings)
+    try {
+        $taskMeasurementGraphics.PageUnit = [System.Drawing.GraphicsUnit]::Display
+        $taskMeasurementGraphics.PageScale = 1
+        $taskClip = $taskMeasurementGraphics.VisibleClipBounds
+        return @{ width = $taskClip.Width; height = $taskClip.Height }
+    } finally { $taskMeasurementGraphics.Dispose() }
+}
+
 # Generate a three-page PDF from scratch; no user documents are opened.
 $taskPdfPath = Join-Path $taskFixtures 'native-three-pages.pdf'
 $taskObjects = New-Object 'System.Collections.Generic.List[string]'
@@ -163,7 +178,13 @@ if ($taskPrinterSummary.Count -gt 0) {
     Assert-True ($taskPageLayout.data.printableArea.width -gt 0 -and $taskPageLayout.data.printableArea.height -gt 0) 'Page layout printable area is invalid'
     $taskLandscapeLayout = Invoke-NativeReadOnly @{ command = 'page-layout'; printerName = $taskPrinterSummary[0].name; settings = @{ orientation = 'landscape' } }
     Assert-True ($taskLandscapeLayout.data.landscape -eq $true) 'Page layout did not apply landscape'
-    Assert-True ($taskLandscapeLayout.data.paper.width -eq $taskPageLayout.data.paper.height -and $taskLandscapeLayout.data.paper.height -eq $taskPageLayout.data.paper.width) 'Landscape page bounds did not rotate'
+    Assert-True ([Math]::Abs($taskLandscapeLayout.data.paper.width - $taskPageLayout.data.paper.height) -lt 1 -and [Math]::Abs($taskLandscapeLayout.data.paper.height - $taskPageLayout.data.paper.width) -lt 1) 'Landscape page bounds did not rotate'
+    foreach ($taskDirection in @(@{ landscape = $false; layout = $taskPageLayout; label = 'portrait' }, @{ landscape = $true; layout = $taskLandscapeLayout; label = 'landscape' })) {
+        $taskMeasuredArea = Measure-PrintableArea $taskPrinterSummary[0].name $taskDirection.landscape
+        $taskReturnedArea = $taskDirection.layout.data.printableArea
+        Assert-True ([Math]::Abs($taskReturnedArea.width - $taskMeasuredArea.width) -lt 0.25) ($taskDirection.label + ' printable width differs from the actual oriented graphics clip')
+        Assert-True ([Math]::Abs($taskReturnedArea.height - $taskMeasuredArea.height) -lt 0.25) ($taskDirection.label + ' printable height differs from the actual oriented graphics clip')
+    }
     $taskRoundTrip = Invoke-NativeReadOnly @{ command = 'decode-settings'; printerName = $taskPrinterSummary[0].name; devModeBase64 = $taskDecoded.data.devModeBase64 }
     Assert-True (($taskDecoded.data.settings | ConvertTo-Json -Compress) -eq ($taskRoundTrip.data.settings | ConvertTo-Json -Compress)) 'DEVMODE basic settings round-trip changed values'
     Write-Output ('Read-only DEVMODE settings: ' + ($taskDecoded.data.settings | ConvertTo-Json -Compress))
@@ -171,4 +192,4 @@ if ($taskPrinterSummary.Count -gt 0) {
 }
 Write-Output 'PASS: native ping, PDF/image inspect, per-file errors, ordered duplex plan, copy/set jobs, settings boundaries, document progress metadata and PDF rasterization. No print/properties/cancel command was invoked.'
 if ($SkipPrinterChecks) { Write-Output 'Printer enumeration and DEVMODE checks were explicitly skipped.' }
-else { Write-Output 'PASS: printer enumeration, read-only jobs and DEVMODE decode/round-trip.' }
+else { Write-Output 'PASS: printer enumeration, read-only jobs, DEVMODE decode/round-trip and oriented printable geometry.' }

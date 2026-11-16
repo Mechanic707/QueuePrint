@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PlatformTarget>x64</PlatformTarget>
+    <StartupObject>QueuePrint.OutputRegression.Program</StartupObject>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../*.cs" Link="Native/%(Filename)%(Extension)" />
+    <None Include="../../publish/pdfium.dll" Link="pdfium.dll" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
