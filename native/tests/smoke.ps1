@@ -18,7 +18,15 @@ function Invoke-NativeReadOnly($Request, [switch]$AllowFailure) {
     $taskProcessInfo.RedirectStandardError = $true
     $taskProcessInfo.StandardOutputEncoding = New-Object System.Text.UTF8Encoding($false)
     $taskProcessInfo.StandardErrorEncoding = New-Object System.Text.UTF8Encoding($false)
-    $taskProcess = [System.Diagnostics.Process]::Start($taskProcessInfo)
+    # .NET Framework inherits Console.InputEncoding for its stdin writer and
+    # emits the preamble at process start. CI can supply UTF-8 with a BOM.
+    $taskPreviousInputEncoding = [Console]::InputEncoding
+    try {
+        [Console]::InputEncoding = New-Object System.Text.UTF8Encoding($false)
+        $taskProcess = [System.Diagnostics.Process]::Start($taskProcessInfo)
+    } finally {
+        [Console]::InputEncoding = $taskPreviousInputEncoding
+    }
     $taskOutput = $taskProcess.StandardOutput.ReadToEndAsync()
     $taskError = $taskProcess.StandardError.ReadToEndAsync()
     $taskPayload = ($Request | ConvertTo-Json -Depth 30 -Compress) + "`n"
