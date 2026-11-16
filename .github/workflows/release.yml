@@ -37,6 +37,10 @@ jobs:
         run: |
           npm.cmd run native:build
           npm.cmd run dist
+      - name: Verify all packaged source and native components
+        run: node scripts/check-package.mjs
+      - name: Verify repeated portable launches
+        run: npm.cmd run qa:portable
       - name: Write checksums
         shell: powershell
         run: |

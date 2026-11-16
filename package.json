@@ -1,7 +1,7 @@
 {
   "name": "queueprint",
   "productName": "序印 QueuePrint",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "保留文件夹顺序的本地批量打印工具",
   "author": "QueuePrint",
   "license": "MIT",
@@ -16,13 +16,14 @@
     "start": "electron .",
     "test": "node --test test/*.test.mjs test-main/*.test.mjs",
     "native:build": "powershell -NoProfile -ExecutionPolicy Bypass -File native/build.ps1",
-    "prepack": "node scripts/ensure-electron.cjs",
+    "prepack": "node scripts/ensure-electron.cjs && node scripts/ensure-native.cjs",
     "pack": "electron-builder --win dir --x64",
-    "predist": "node scripts/ensure-electron.cjs",
+    "predist": "node scripts/ensure-electron.cjs && node scripts/ensure-native.cjs",
     "dist": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package.ps1",
     "qa:fixtures": "node scripts/create-fixtures.mjs",
     "qa:desktop": "node scripts/qa-desktop.cjs",
     "qa:enhancements": "node scripts/qa-enhancements.cjs",
+    "qa:portable": "node scripts/qa-portable.cjs",
     "docs:screenshots": "node scripts/capture-docs.cjs"
   },
   "dependencies": {
@@ -78,7 +79,8 @@
       "signExecutable": false
     },
     "portable": {
-      "requestExecutionLevel": "user"
+      "requestExecutionLevel": "user",
+      "unpackDirName": true
     }
   }
 }

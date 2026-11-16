@@ -22,7 +22,7 @@ const native = (request, options) => {
   if (process.env.QUEUEPRINT_QA === '1' && ['print', 'properties', 'cancel'].includes(request.command)) {
     throw new Error('自动检查进程禁止实际打印、修改驱动属性和取消真实任务。');
   }
-  return runNative(findNativeHost(appRoot, process.resourcesPath), request, options);
+  return runNative(findNativeHost(appRoot, process.resourcesPath, { packaged: app.isPackaged }), request, options);
 };
 const registry = new FileRegistry((paths) => native({ command: 'inspect', paths }, { timeout: 5 * 60_000 }));
 const queue = new PrintQueue({

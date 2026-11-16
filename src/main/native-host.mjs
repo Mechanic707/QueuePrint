@@ -3,13 +3,20 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
 
-export function findNativeHost(appRoot, resourcesPath) {
+export function findNativeHost(appRoot, resourcesPath, { packaged = false } = {}) {
   const candidates = [
     path.join(resourcesPath, 'native', 'QueuePrint.Host.exe'),
     path.join(appRoot, 'native', 'publish', 'QueuePrint.Host.exe'),
   ];
   const executable = candidates.find((candidate) => existsSync(candidate));
-  if (!executable) throw new Error('本地打印组件尚未构建。请先运行 npm run native:build。');
+  if (!executable) {
+    const error = new Error(packaged
+      ? '本地打印组件缺失，请关闭所有序印窗口后重新打开程序；若仍失败，请重新下载完整的 Windows 版。'
+      : '本地打印组件尚未构建。请先运行 npm run native:build。');
+    error.code = 'NATIVE_HOST_MISSING';
+    error.submissionStarted = false;
+    throw error;
+  }
   return executable;
 }
 

@@ -18,7 +18,17 @@ async function visit(directory) {
   }
 }
 await visit('src');
-for (const name of ['QueuePrint.Host.exe', 'QueuePrint.Host.dll', 'pdfium.dll']) {
-  assert.equal(hash(await fs.readFile(path.join(root, 'native/publish', name))), hash(await fs.readFile(path.join(root, 'release/win-unpacked/resources/native', name))), `Stale native resource: ${name}`);
+let nativeChecked = 0;
+async function visitNative(directory = '') {
+  for (const entry of await fs.readdir(path.join(root, 'native/publish', directory), { withFileTypes: true })) {
+    const relative = path.join(directory, entry.name);
+    if (entry.isDirectory()) await visitNative(relative);
+    else if (!entry.name.endsWith('.pdb')) {
+      assert.equal(hash(await fs.readFile(path.join(root, 'native/publish', relative))), hash(await fs.readFile(path.join(root, 'release/win-unpacked/resources/native', relative))), `Missing or stale native resource: ${relative}`);
+      nativeChecked++;
+    }
+  }
 }
-console.log(JSON.stringify({ packagedSourcesMatch: checked, nativeResourcesMatch: 3 }));
+await visitNative();
+assert.ok(nativeChecked > 0, 'Native publish directory must not be empty');
+console.log(JSON.stringify({ packagedSourcesMatch: checked, nativeResourcesMatch: nativeChecked }));

@@ -8,10 +8,10 @@
 
 面向 Windows 的本地批量打印工具。混合导入 PDF 与图片，保留子文件夹分组，核对顺序后一次提交。
 
-[![Version](https://img.shields.io/badge/version-0.1.1-4564e8?style=flat-square)](https://github.com/Mechanic707/QueuePrint/releases)
+[![Version](https://img.shields.io/badge/version-0.1.2-4564e8?style=flat-square)](https://github.com/Mechanic707/QueuePrint/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078d4?style=flat-square)](#安装与启动)
 [![License](https://img.shields.io/badge/license-MIT-258a69?style=flat-square)](LICENSE)
-[![Tests](https://img.shields.io/badge/Node%20tests-38%20passed-258a69?style=flat-square)](#测试与验证)
+[![Tests](https://img.shields.io/badge/Node%20tests-46%20passed-258a69?style=flat-square)](#测试与验证)
 [![Windows checks](https://github.com/Mechanic707/QueuePrint/actions/workflows/ci.yml/badge.svg)](https://github.com/Mechanic707/QueuePrint/actions/workflows/ci.yml)
 
 [**下载 Windows 版**](https://github.com/Mechanic707/QueuePrint/releases/latest) · [快速开始](#快速开始) · [功能一览](#功能一览) · [开发与构建](#开发与构建) · [提交问题](https://github.com/Mechanic707/QueuePrint/issues)
@@ -68,17 +68,17 @@
 在 [Releases](https://github.com/Mechanic707/QueuePrint/releases/latest) 下载 Windows x64 免安装包：
 
 ```text
-QueuePrint-0.1.1-win-x64.exe
+QueuePrint-0.1.2-win-x64.exe
 ```
 
 打开即可使用。发布包已包含 Electron、本地打印助手及所需 .NET 运行时，使用软件无需安装 Node.js 或 .NET SDK。打印机需要先在 Windows 中安装相应驱动。
 
 | 下载项 | 说明 |
 | --- | --- |
-| [QueuePrint-0.1.1-win-x64.exe](https://github.com/Mechanic707/QueuePrint/releases/download/v0.1.1/QueuePrint-0.1.1-win-x64.exe) | Windows x64 免安装程序 |
-| [SHA256SUMS.txt](https://github.com/Mechanic707/QueuePrint/releases/download/v0.1.1/SHA256SUMS.txt) | 发行文件的 SHA-256 校验值 |
+| [QueuePrint-0.1.2-win-x64.exe](https://github.com/Mechanic707/QueuePrint/releases/download/v0.1.2/QueuePrint-0.1.2-win-x64.exe) | Windows x64 免安装程序 |
+| [SHA256SUMS.txt](https://github.com/Mechanic707/QueuePrint/releases/download/v0.1.2/SHA256SUMS.txt) | 发行文件的 SHA-256 校验值 |
 
-当前发行包未做代码签名，可通过 `Get-FileHash .\QueuePrint-0.1.1-win-x64.exe -Algorithm SHA256` 核对发布页中的校验值。
+当前发行包未做代码签名，可通过 `Get-FileHash .\QueuePrint-0.1.2-win-x64.exe -Algorithm SHA256` 核对发布页中的校验值。
 
 如使用目录版，运行 `win-unpacked/序印 QueuePrint.exe`，并保留整个 `win-unpacked` 目录。升级时先关闭旧版本，再运行新版本。
 
@@ -250,7 +250,9 @@ npm.cmd run pack
 npm.cmd run dist
 ```
 
-构建输出位于 `release/`。`pack` 生成 `win-unpacked/`，`dist` 生成 `QueuePrint-<版本>-win-x64.exe`。免安装包打包了本地助手与自包含 .NET 运行时；目录版需要完整保留同目录依赖。
+构建输出位于 `release/`。`pack` 生成 `win-unpacked/`，`dist` 生成 `QueuePrint-<版本>-win-x64.exe`。两者会先检查原生组件完整性，缺失时停止打包。免安装包打包了本地助手与自包含 .NET 运行时；目录版需要完整保留同目录依赖。
+
+便携版每次启动使用独立解压目录，防止重复启动后的清理影响仍在运行的窗口。当前固定的 electron-builder 26.18.0 通过 `portable.unpackDirName: true` 启用此行为；升级打包工具后应运行下面的便携版回归检查。
 
 ### 常用命令
 
@@ -261,6 +263,7 @@ npm.cmd run dist
 | `npm.cmd run native:build` | 构建自包含 Windows 原生助手 |
 | `npm.cmd run pack` | 构建 Windows 目录版 |
 | `npm.cmd run dist` | 构建 Windows x64 免安装包 |
+| `npm.cmd run qa:portable` | 验证最终便携 EXE 重复启动后原生组件仍可用 |
 | `npm.cmd run qa:fixtures` | 在 `.qa/fixtures` 创建自建样例文件 |
 | `npm.cmd run qa:desktop` | 检查实际 Electron 导入、预览与确认界面 |
 | `npm.cmd run qa:enhancements` | 检查资源管理器拖放、去重及单文件多份 |
@@ -268,7 +271,7 @@ npm.cmd run dist
 
 ## 测试与验证
 
-当前版本的 **38 项 Node 自动测试**覆盖目录自然排序、同级移动、逐项属性继承、页码范围、份数与套数乘法、双面补白、导入去重、提交互斥、暂停/停止，以及提交状态不明时的恢复约束。
+当前版本的 **46 项 Node 自动测试**覆盖目录自然排序、同级移动、逐项属性继承、页码范围、份数与套数乘法、双面补白、导入去重、提交互斥、暂停/停止、提交状态不明时的恢复约束，以及原生组件缺失和发行包完整性检查。
 
 ```powershell
 npm.cmd test
@@ -302,6 +305,7 @@ python native/tests/image_smoke.py
 - 推送到 `main` 或提交 Pull Request 时，自动运行 Windows Node 测试和原生助手只读检查。
 - 推送与 `package.json` 版本一致的 `v*` 标签时，自动构建 Windows 免安装包、生成校验值并上传到 Release。
 - 手动触发发布工作流会生成可下载的 Actions 构建产物；已有同名 Release 资产会保留。
+- 发布前会对比打包后的源码与全部原生文件，并运行最终便携 EXE 的重复启动回归，避免只验证目录版。
 
 ## 项目结构
 
@@ -326,6 +330,13 @@ QueuePrint/
 
 ## 更新记录
 
+### v0.1.2
+
+- 修复重复打开免安装程序后，临时目录被另一启动进程清理、导致打印组件丢失的问题。
+- 每次便携启动使用独立目录；新增最终 EXE 的重复启动回归检查。
+- 打包前验证本地打印助手及自包含运行库，避免生成缺组件的发行包。
+- 发行版组件缺失时显示重新打开／重新下载提示，开发环境保留构建命令。
+
 ### v0.1.1
 
 - 清单新增直接编辑单文件份数的入口，顺序确认标明套号与副本编号。
@@ -334,6 +345,10 @@ QueuePrint/
 - 增加公开文档截图、使用示例及 Windows 自动检查流程。
 
 ## 常见问题
+
+### v0.1.1 显示“本地打印组件尚未构建”怎么办？
+
+请关闭所有序印窗口，下载并运行 **v0.1.2 或更新版本**。v0.1.1 便携版在重复启动时可能清理正在使用的打印组件，v0.1.2 已修复。使用发行版无需执行 `npm run native:build`；该命令仅供源码开发使用。
 
 ### 支持 Word、Excel、PPT 或其他图片格式吗？
 
