@@ -104,13 +104,21 @@ function imageFixture() {
     }
     async function setting(key, value) { await page.locator(`[data-setting="${key}"]`).selectOption(value); await settled(); }
     async function pageNumber(number) { await fitWholeSheet(); await page.locator('#qp-preview-page-number').fill(String(number)); await page.locator('#qp-preview-page-number').press('Tab'); await page.waitForFunction(number => document.querySelector('#qp-preview-view').dataset.loading === 'false' && Number(document.querySelector('#qp-preview-view').dataset.page) === number, number); }
-    async function fitWholeSheet() {
-      await page.waitForFunction(() => {
+    async function fitWholeSheet({ shrinkStage = false } = {}) {
+      const handle = await page.waitForFunction(shrinkStage => {
         const view = document.querySelector('#qp-preview-view'), stage = document.querySelector('#qp-paper-stage'), content = document.querySelector('#qp-preview-content'), css = getComputedStyle(stage);
         const width = content.getBoundingClientRect().width, height = content.getBoundingClientRect().height;
         const availableWidth = stage.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight), availableHeight = stage.clientHeight - parseFloat(css.paddingTop) - parseFloat(css.paddingBottom);
-        return view.dataset.loading === 'false' && view.dataset.zoomMode === 'page' && width <= availableWidth + 2 && height <= availableHeight + 2 && (Math.abs(width - availableWidth) < 2 || Math.abs(height - availableHeight) < 2) && stage.scrollWidth <= stage.clientWidth + 2 && stage.scrollHeight <= stage.clientHeight + 2;
-      }, null, { timeout: 30000 });
+        const fits = view.dataset.loading === 'false' && !content.hidden && view.dataset.zoomMode === 'page' && width > 0 && height > 0 && width <= availableWidth + 2 && height <= availableHeight + 2 && (Math.abs(width - availableWidth) < 2 || Math.abs(height - availableHeight) < 2) && stage.scrollWidth <= stage.clientWidth + 2 && stage.scrollHeight <= stage.clientHeight + 2;
+        if (!fits) return false;
+        const snapshot = { width, height };
+        if (shrinkStage) {
+          const smallerHeight = Math.max(80, stage.clientHeight - 80);
+          stage.style.width = Math.max(180, stage.clientWidth - 100) + 'px'; stage.style.height = smallerHeight + 'px'; stage.style.flex = `0 0 ${smallerHeight}px`; stage.style.alignSelf = 'flex-start';
+        }
+        return snapshot;
+      }, shrinkStage, { timeout: 30000 });
+      const snapshot = await handle.jsonValue(); await handle.dispose(); return snapshot;
     }
     async function pixelAt(x, y) {
       return page.locator('#qp-pdf-canvas').evaluate((canvas, { x, y }) => [...canvas.getContext('2d').getImageData(Math.floor(canvas.width * x), Math.floor(canvas.height * y), 1, 1).data].slice(0, 3), { x, y });
@@ -147,13 +155,10 @@ function imageFixture() {
     assert.equal(await electron.evaluate((_electron, id) => globalThis.__paperPreviewQA.reads[id], pdfId), reads, 'Paper, direction and scale changes must reuse source bytes.');
 
     // ResizeObserver must recalculate both dimensions without resetting layout.
-    const originalSize = await content.boundingBox();
-    await page.locator('#qp-paper-stage').evaluate(stage => {
-      const height = Math.max(80, stage.clientHeight - 80);
-      stage.style.width = Math.max(180, stage.clientWidth - 100) + 'px'; stage.style.height = height + 'px'; stage.style.flex = `0 0 ${height}px`; stage.style.alignSelf = 'flex-start';
-    });
-    await fitWholeSheet();
-    const smallerSize = await content.boundingBox();
+    // Capture the visible baseline and resize in one browser task; a pending
+    // observer refresh must not hide content between separate automation calls.
+    const originalSize = await fitWholeSheet({ shrinkStage: true });
+    const smallerSize = await fitWholeSheet();
     assert.ok(smallerSize.width < originalSize.width - 5 || smallerSize.height < originalSize.height - 5, 'Whole-sheet fit must follow the available preview viewport.');
     await geometry({ paperWidth: 1169, paperHeight: 1654, destinationWidth: 1119, destinationHeight: 559.5 });
     await page.locator('#qp-paper-stage').evaluate(stage => { stage.style.width = ''; stage.style.height = ''; stage.style.flex = ''; stage.style.alignSelf = ''; });
@@ -185,7 +190,7 @@ function imageFixture() {
     await page.locator('#qp-preview-mode').selectOption('source'); await settled();
     assert.equal(await page.locator('#qp-image-preview').isVisible(), true);
     assert.equal(await page.locator('#qp-preview-printable-area').isVisible(), false);
-    const sourceSize = await content.boundingBox(); assert.ok(Math.abs(sourceSize.width / sourceSize.height - 2) < .01, 'Source mode retains original image aspect ratio.');
+    const sourceSize = await fitWholeSheet(); assert.ok(Math.abs(sourceSize.width / sourceSize.height - 2) < .01, 'Source mode retains original image aspect ratio.');
     await page.locator('#qp-preview-mode').selectOption('print'); await settled();
     await geometry({ paperWidth: 827, paperHeight: 1169, destinationWidth: 777, destinationHeight: 388.5 });
     assert.equal(await electron.evaluate((_electron, id) => globalThis.__paperPreviewQA.reads[id], imageId), imageReads, 'Switching sheet/source views must reuse image bytes.');

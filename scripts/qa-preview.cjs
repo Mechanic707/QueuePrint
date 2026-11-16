@@ -144,15 +144,19 @@ async function writePdf(file, colors, size) {
     const fit = await page.evaluate(() => { const stage = document.querySelector('#qp-paper-stage'), canvas = document.querySelector('#qp-pdf-canvas'), style = getComputedStyle(stage); return { width: canvas.getBoundingClientRect().width, height: canvas.getBoundingClientRect().height, availableWidth: stage.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight), availableHeight: stage.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom) }; });
     assert.ok(fit.width <= fit.availableWidth + 2 && fit.height <= fit.availableHeight + 2, 'Fit-page must show the whole page.');
     await page.locator('#qp-preview-fit-width').click(); await settled(a);
-    await page.waitForFunction(() => {
+    // Capture a settled, positive baseline and resize in the same browser turn.
+    // A pending ResizeObserver render can otherwise hide the canvas between a
+    // ready check and a separate measurement, turning the baseline into zero.
+    const resizeHandle = await page.waitForFunction(() => {
       const stage = document.querySelector('#qp-paper-stage'), canvas = document.querySelector('#qp-pdf-canvas'), css = getComputedStyle(stage);
-      return document.querySelector('#qp-preview-view').dataset.loading === 'false' && Math.abs(canvas.getBoundingClientRect().width - (stage.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight))) < 2;
+      const width = canvas.getBoundingClientRect().width, available = stage.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight);
+      if (document.querySelector('#qp-preview-view').dataset.loading !== 'false' || width <= 0 || Math.abs(width - available) >= 2) return false;
+      const before = { canvasWidth: width, stageWidth: stage.clientWidth, requestedWidth: Math.max(180, stage.clientWidth - 100) };
+      stage.style.width = before.requestedWidth + 'px'; stage.style.alignSelf = 'flex-start';
+      return before;
     });
-    const oldWidth = await page.locator('#qp-pdf-canvas').evaluate(element => element.getBoundingClientRect().width);
-    // Hosted Windows can clamp initial window bounds to its virtual monitor.
-    // Exercise the actual ResizeObserver dependency with a measured viewport.
-    await page.locator('#qp-paper-stage').evaluate(element => { element.style.width = Math.max(180, element.clientWidth - 100) + 'px'; element.style.alignSelf = 'flex-start'; });
-    await page.waitForFunction(oldWidth => { const view = document.querySelector('#qp-preview-view'), canvas = document.querySelector('#qp-pdf-canvas'); return view.dataset.loading === 'false' && canvas.getBoundingClientRect().width < oldWidth - 20; }, oldWidth);
+    report.resize = await resizeHandle.jsonValue(); await resizeHandle.dispose();
+    await page.waitForFunction(oldWidth => { const view = document.querySelector('#qp-preview-view'), canvas = document.querySelector('#qp-pdf-canvas'); return view.dataset.loading === 'false' && canvas.getBoundingClientRect().width > 0 && canvas.getBoundingClientRect().width < oldWidth - 20; }, report.resize.canvasWidth);
     assert.ok(await page.locator('#qp-paper-stage').evaluate(element => element.scrollWidth <= element.clientWidth + 2));
     await page.locator('#qp-paper-stage').evaluate(element => { element.style.width = ''; element.style.alignSelf = ''; });
 
