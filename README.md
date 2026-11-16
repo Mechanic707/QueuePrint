@@ -8,10 +8,10 @@
 
 面向 Windows 的本地批量打印工具。混合导入 PDF 与图片，保留子文件夹分组，核对顺序后一次提交。
 
-[![Version](https://img.shields.io/badge/version-0.1.3-4564e8?style=flat-square)](https://github.com/Mechanic707/QueuePrint/releases)
+[![Version](https://img.shields.io/badge/version-0.1.4-4564e8?style=flat-square)](https://github.com/Mechanic707/QueuePrint/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078d4?style=flat-square)](#安装与启动)
 [![License](https://img.shields.io/badge/license-MIT-258a69?style=flat-square)](LICENSE)
-[![Tests](https://img.shields.io/badge/Node%20tests-51%20passed-258a69?style=flat-square)](#测试与验证)
+[![Tests](https://img.shields.io/badge/Node%20tests-59%20passed-258a69?style=flat-square)](#测试与验证)
 [![Windows checks](https://github.com/Mechanic707/QueuePrint/actions/workflows/ci.yml/badge.svg)](https://github.com/Mechanic707/QueuePrint/actions/workflows/ci.yml)
 
 [**下载 Windows 版**](https://github.com/Mechanic707/QueuePrint/releases/latest) · [快速开始](#快速开始) · [功能一览](#功能一览) · [开发与构建](#开发与构建) · [提交问题](https://github.com/Mechanic707/QueuePrint/issues)
@@ -47,6 +47,7 @@
 | PDF 页码范围 | 例如 `1-3, 5`，按所选页面生成打印计划 |
 | 双面文件边界 | 默认每个文件从新纸开始，按需预留空白背面，每套独立起纸 |
 | 提交控制 | 打印前确认，按序提交，暂停或停止后续任务 |
+| 文件级进度 | 按文件显示处理与确认提交进度，查看当前文件、页数及多份进度 |
 | 常用方案 | 保存整批打印属性及文件边界规则 |
 | 本地处理 | 文档读取、预览和打印均在本机完成，源文件保持原样 |
 
@@ -68,17 +69,17 @@
 在 [Releases](https://github.com/Mechanic707/QueuePrint/releases/latest) 下载 Windows x64 免安装包：
 
 ```text
-QueuePrint-0.1.3-win-x64.exe
+QueuePrint-0.1.4-win-x64.exe
 ```
 
 打开即可使用。发布包已包含 Electron、本地打印助手及所需 .NET 运行时，使用软件无需安装 Node.js 或 .NET SDK。打印机需要先在 Windows 中安装相应驱动。
 
 | 下载项 | 说明 |
 | --- | --- |
-| [QueuePrint-0.1.3-win-x64.exe](https://github.com/Mechanic707/QueuePrint/releases/download/v0.1.3/QueuePrint-0.1.3-win-x64.exe) | Windows x64 免安装程序 |
-| [SHA256SUMS.txt](https://github.com/Mechanic707/QueuePrint/releases/download/v0.1.3/SHA256SUMS.txt) | 发行文件的 SHA-256 校验值 |
+| [QueuePrint-0.1.4-win-x64.exe](https://github.com/Mechanic707/QueuePrint/releases/download/v0.1.4/QueuePrint-0.1.4-win-x64.exe) | Windows x64 免安装程序 |
+| [SHA256SUMS.txt](https://github.com/Mechanic707/QueuePrint/releases/download/v0.1.4/SHA256SUMS.txt) | 发行文件的 SHA-256 校验值 |
 
-当前发行包未做代码签名，可通过 `Get-FileHash .\QueuePrint-0.1.3-win-x64.exe -Algorithm SHA256` 核对发布页中的校验值。
+当前发行包未做代码签名，可通过 `Get-FileHash .\QueuePrint-0.1.4-win-x64.exe -Algorithm SHA256` 核对发布页中的校验值。
 
 如使用目录版，运行 `win-unpacked/序印 QueuePrint.exe`，并保留整个 `win-unpacked` 目录。升级时先关闭旧版本，再运行新版本。
 
@@ -196,8 +197,17 @@ A → A → A → A → A → A → B → B
 
 ## 打印状态与任务控制
 
+队列窗口以**文件数量**显示处理进度。比如 12 个文件合并为 1 个 Windows 作业时，主进度仍按 `0 / 12 个文件` 更新；当前文件会显示名称、内容页数和第几份。存在多份或多套时，额外显示已处理份次。
+
+同一文件的全部计划份次处理完，才计为 1 个“已处理文件”；所属 Windows 作业获得回执后，才计入“已确认提交”。Windows 作业编号与技术名称放在可展开的详情中。逐文件列表显示前 100 个文件，整体计数与当前文件覆盖全部清单。
+
+![文件级处理与提交进度](docs/images/progress.png)
+
 | 界面状态或操作 | 含义 |
 | --- | --- |
+| 已处理 | 对应文件的全部份次已完成绘制处理，尚不代表 Windows 已接收 |
+| 已处理，待提交确认 | 文件处理完成，等待所属 Windows 作业的提交回执 |
+| 已确认提交 | 对应文件的全部计划份次均已获得提交确认 |
 | 正在准备／有序提交 | 验证文件及设置，按计划向 Windows 队列提交 |
 | 暂停后续 | 等当前作业提交结束后暂停，阻止下一个作业提交 |
 | 继续提交 | 继续处理已暂停批次中的后续作业 |
@@ -264,6 +274,7 @@ npm.cmd run dist
 | `npm.cmd run pack` | 构建 Windows 目录版 |
 | `npm.cmd run dist` | 构建 Windows x64 免安装包 |
 | `npm.cmd run qa:portable` | 验证最终便携 EXE 重复启动后原生组件仍可用 |
+| `npm.cmd run qa:progress` | 使用模拟进度验证文件级队列界面，不提交打印作业 |
 | `npm.cmd run qa:fixtures` | 在 `.qa/fixtures` 创建自建样例文件 |
 | `npm.cmd run qa:desktop` | 检查实际 Electron 导入、预览与确认界面 |
 | `npm.cmd run qa:enhancements` | 检查资源管理器拖放、去重及单文件多份 |
@@ -271,7 +282,7 @@ npm.cmd run dist
 
 ## 测试与验证
 
-当前版本的 **51 项 Node 自动测试**覆盖目录自然排序、同级移动、逐项属性继承、页码范围、份数与套数乘法、双面补白、导入去重、提交互斥、暂停/停止、提交状态不明时的恢复约束、原生组件缺失、发行包完整性，以及 Windows 本地界面路径大小写和编码兼容性。
+当前版本的 **59 项 Node 自动测试**覆盖目录自然排序、同级移动、逐项属性继承、页码范围、份数与套数乘法、双面补白、导入去重、提交互斥、暂停/停止、提交状态不明时的恢复约束、原生组件缺失、发行包完整性、Windows 路径兼容性，以及文件级进度、重复回执去重和中断后的确认保留。
 
 ```powershell
 npm.cmd test
@@ -329,6 +340,14 @@ QueuePrint/
 界面将勾选、排序和属性交给核心模块生成明确计划；主进程核对已导入文件并有序提交；原生助手通过 Windows 打印 API 与 PDFium 完成逐页渲染。原生协议与命令说明见 [native/README.md](native/README.md)。
 
 ## 更新记录
+
+### v0.1.4
+
+- 打印队列主进度按文件显示，多个文件合并成一个 Windows 作业时也能逐个更新。
+- 展示当前文件名、内容页数、单文件多份及整批多套的处理份次。
+- 区分“已处理”和“已确认提交”，逐文件显示待处理、处理中、待提交、已提交及待核对状态。
+- Windows 作业详情默认折叠，更新进度时保留展开与滚动位置。
+- 增加文件级进度及中断场景测试，保留原有打印分组、顺序和暂停行为。
 
 ### v0.1.3
 

@@ -30,7 +30,9 @@ const queue = new PrintQueue({
   registry, runNative: native,
   emit: (event) => { if (win && !win.isDestroyed()) win.webContents.send('qp:print-progress', event); },
   audit: (event) => {
-    const record = { time: new Date().toISOString(), batchId: event.batchId, status: event.status, taskIndex: event.taskIndex, taskCount: event.taskCount, message: event.message, jobs: event.jobs };
+    const record = { time: new Date().toISOString(), batchId: event.batchId, status: event.status, taskIndex: event.taskIndex, taskCount: event.taskCount,
+      processedFiles: event.processedFiles, submittedFiles: event.submittedFiles, totalFiles: event.totalFiles,
+      processedUnits: event.processedUnits, submittedUnits: event.submittedUnits, totalUnits: event.totalUnits, message: event.message, jobs: event.jobs };
     void fs.appendFile(path.join(app.getPath('userData'), 'print-history.jsonl'), JSON.stringify(record) + '\n', 'utf8').catch(() => {});
   },
 });

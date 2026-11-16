@@ -55,12 +55,17 @@ internal static class PrintEngine
         return new
         {
             pageCount = plan.Groups.Sum(g => g.Pages.Count),
-            jobs = plan.Groups.Select(g => new
+            jobs = plan.Groups.Select((g, groupIndex) => new
             {
+                groupIndex,
+                documentIndices = DocumentIndices(g),
                 settings = g.Options,
                 pageCount = g.Pages.Count,
                 pages = g.Pages.Select(p => new { path = p.Path, page = p.Blank ? (int?)null : p.Index + 1,
-                    blank = p.Blank, width = p.Size.Width, height = p.Size.Height }).ToArray(),
+                    blank = p.Blank, width = p.Size.Width, height = p.Size.Height,
+                    groupIndex, documentIndex = p.DocumentIndex, fileId = p.FileId,
+                    processedPagesBefore = p.ProcessedPagesBefore, processedPages = p.ProcessedPages,
+                    contentPages = p.ContentPages, documentComplete = p.DocumentComplete }).ToArray(),
             }).ToArray(),
         };
     }
@@ -102,6 +107,11 @@ internal static class PrintEngine
             doc.PrintPage += (_, e) =>
             {
                 var page = group.Pages[cursor];
+                // Identifies the current document before potentially expensive PDF/image drawing.
+                // Neither this event nor document-progress is a queue-submission receipt.
+                Program.Write(new { @event = "document-processing", groupIndex,
+                    documentIndex = page.DocumentIndex, fileId = page.FileId,
+                    processedPages = page.ProcessedPagesBefore, contentPages = page.ContentPages, blank = page.Blank });
                 if (e.Graphics is null) throw new RequestException("PRINT_GRAPHICS_FAILED", "打印驱动没有提供绘图设备。");
                 e.Graphics.PageUnit = GraphicsUnit.Display;
                 e.Graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
@@ -116,6 +126,11 @@ internal static class PrintEngine
                 }
                 cursor++;
                 e.HasMorePages = cursor < group.Pages.Count;
+                Program.Write(new { @event = "document-progress", groupIndex,
+                    documentIndex = page.DocumentIndex, fileId = page.FileId,
+                    processedPages = page.ProcessedPages, contentPages = page.ContentPages,
+                    blank = page.Blank, documentComplete = page.DocumentComplete });
+                // Legacy event name: drawing has finished, but OnEndPage/EndDoc have not.
                 Program.Write(new { @event = "page-spooled", documentName = title, groupIndex, pageIndex = cursor - 1, pageCount = group.Pages.Count });
             };
 
@@ -133,7 +148,8 @@ internal static class PrintEngine
                 throw new RequestException("SUBMISSION_UNCERTAIN", "打印提交中断，可能已有页面进入队列；请核对队列和出纸后再重试。" + e.Message);
             }
             uint? jobId = FindJob(request.PrinterName, title);
-            var job = new { printerName = request.PrinterName, jobId, documentName = title, pageCount = group.Pages.Count,
+            var job = new { printerName = request.PrinterName, jobId, documentName = title, groupIndex,
+                documentIndices = DocumentIndices(group), pageCount = group.Pages.Count,
                 status = "submitted", physicalCompletionConfirmed = false };
             jobs.Add(job);
             Program.Write(new { @event = "job-submitted", job });
@@ -174,8 +190,9 @@ internal static class PrintEngine
             for (int setIndex = 0; setIndex < sets; setIndex++)
             {
                 Group? current = null; // A new copy/set starts on a fresh physical sheet/job.
-                foreach (var document in request.Documents)
+                for (int documentIndex = 0; documentIndex < request.Documents.Count; documentIndex++)
                 {
+                    var document = request.Documents[documentIndex];
                     PrintOptions options = (request.Settings ?? new()).Merge(document.Settings);
                     ValidateOptions(options);
                     string key = JsonSerializer.Serialize(options, Program.Json);
@@ -198,14 +215,18 @@ internal static class PrintEngine
                         if (document.StartOnFront && IsDuplex(options) && current.Pages.Count % 2 != 0)
                             throw new RequestException("INVALID_FRONT_BOUNDARY", "计划声明正面起始，但前一段未补齐空白背面。");
                         SizeF lastSize = default;
-                        foreach (int page in pages)
+                        for (int pageOrdinal = 0; pageOrdinal < pages.Count; pageOrdinal++)
                         {
+                            int page = pages[pageOrdinal];
                             lastSize = source.GetPageSize(page);
                             if (!float.IsFinite(lastSize.Width) || !float.IsFinite(lastSize.Height) || lastSize.Width <= 0 || lastSize.Height <= 0)
                                 throw new RequestException("INVALID_PAGE_SIZE", "文件页面尺寸无效。");
-                            current.Pages.Add(new(path, page, false, lastSize));
+                            current.Pages.Add(new(path, page, false, lastSize, documentIndex,
+                                document.FileId ?? string.Empty, pageOrdinal + 1, pages.Count,
+                                pageOrdinal == pages.Count - 1 && !document.AppendBlank));
                         }
-                        if (document.AppendBlank) current.Pages.Add(new(path, -1, true, lastSize));
+                        if (document.AppendBlank) current.Pages.Add(new(path, -1, true, lastSize, documentIndex,
+                            document.FileId ?? string.Empty, pages.Count, pages.Count, true));
                         if (plan.Groups.Sum(g => g.Pages.Count) > 100_000)
                             throw new RequestException("PLAN_TOO_LARGE", "单次计划超过 100,000 页，请分批打印。");
                     }
@@ -217,6 +238,7 @@ internal static class PrintEngine
     }
 
     private static bool IsDuplex(PrintOptions options) => options.Duplex is "longEdge" or "shortEdge" or "long" or "short";
+    private static int[] DocumentIndices(Group group) => group.Pages.Select(page => page.DocumentIndex).Distinct().ToArray();
     private static void ValidateOptions(PrintOptions options)
     {
         if (options.Scale is not null and not "fit" and not "actual" and not "shrink")
@@ -238,5 +260,9 @@ internal static class PrintEngine
         internal PrintOptions Options { get; } = options;
         internal List<PlannedPage> Pages { get; } = [];
     }
-    private sealed record PlannedPage(string Path, int Index, bool Blank, SizeF Size);
+    private sealed record PlannedPage(string Path, int Index, bool Blank, SizeF Size,
+        int DocumentIndex, string FileId, int ProcessedPages, int ContentPages, bool DocumentComplete)
+    {
+        internal int ProcessedPagesBefore => ProcessedPages - (Blank ? 0 : 1);
+    }
 }

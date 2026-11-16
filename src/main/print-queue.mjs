@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { FileProgress } from './file-progress.mjs';
 
 const duplexModes = { simplex: 'simplex', long: 'longEdge', short: 'shortEdge', longEdge: 'longEdge', shortEdge: 'shortEdge' };
 
@@ -33,15 +34,11 @@ export class PrintQueue {
     const b = this.batch;
     if (!b) return;
     if (status) b.status = status;
-    const completeIds = [...b.planned.keys()].filter((id) => (b.submitted.get(id) || 0) === b.planned.get(id));
     const payload = {
       batchId: b.id, status: b.status, taskIndex: b.index, taskCount: b.tasks.length, totalTasks: b.tasks.length,
-      submittedFiles: completeIds.length, totalFiles: b.planned.size,
-      submittedUnits: [...b.submitted.values()].reduce((sum, n) => sum + n, 0),
-      totalUnits: [...b.planned.values()].reduce((sum, n) => sum + n, 0),
-      fileIds: completeIds, jobs: b.jobs, message, ...extra,
+      ...b.progress.snapshot(), jobs: [...b.jobs], message, ...extra,
     };
-    this.emit(payload); this.audit(payload); return payload;
+    this.emit(payload); if (!extra.transient) this.audit(payload); return payload;
   }
 
   async submit(plan) {
@@ -56,11 +53,11 @@ export class PrintQueue {
     if (plan.ready === false || plan.errors?.length) throw new Error('打印清单存在错误，请先处理页码或文件问题。');
     if (!Array.isArray(plan.tasks) || !plan.tasks.length) throw new Error('没有可打印的文件。');
     if (plan.tasks.length > 10_000) throw new Error('当前批次过大，请分批打印。');
-    const tasks = [], planned = new Map();
+    const tasks = [];
     let pageCount = 0;
     for (const task of plan.tasks) {
       if (!Array.isArray(task.segments) || !task.segments.length) throw new Error('打印任务为空。');
-      const documents = [];
+      const documents = [], details = [];
       for (const segment of task.segments) {
         const file = await this.registry.assertUnchanged(segment.fileId);
         if (file.error || !file.pages) throw new Error(`文件无法打印：${file.name}，${file.error || '无法确定页数'}`);
@@ -71,23 +68,28 @@ export class PrintQueue {
         pageCount += pages.length + Number(!!segment.appendBlank);
         if (pageCount > 100_000) throw new Error('当前批次页数过多，请分批打印。');
         documents.push({ path: file.path, pages: [...pages], appendBlank: !!segment.appendBlank, startOnFront: !!segment.startOnFront, fileId: file.id });
-        planned.set(file.id, (planned.get(file.id) || 0) + 1);
+        details.push({ name: file.name, relativePath: file.relativePath || file.name,
+          setIndex: Number.isInteger(segment.setIndex) && segment.setIndex > 0 ? segment.setIndex : undefined });
       }
-      tasks.push({ documents, settings: nativeSettings(task.settings, plan.devModeBase64 || plan.devmode) });
+      tasks.push({ documents, details, settings: nativeSettings(task.settings, plan.devModeBase64 || plan.devmode) });
     }
     if (this.cancelPreparing) throw new Error('批次已取消，未提交任何任务。');
     const id = randomUUID();
     this.batch = {
       id, status: 'running', printerName: plan.printerName, jobName: String(plan.jobName || '序印批量打印').slice(0, 100),
-      tasks, index: 0, planned, submitted: new Map(), jobs: [], pauseRequested: false, stopRequested: false, needsConfirmation: false,
+      tasks, index: 0, progress: new FileProgress(tasks), jobs: [], jobKeys: new Set(), lastProgressAt: 0,
+      pauseRequested: false, stopRequested: false, needsConfirmation: false,
     };
     this.event('running', '开始按清单顺序提交打印任务。');
     this.done = this.process().catch((error) => {
-      const uncertain = error.submissionStarted !== false;
+      const pending = this.batch.progress.unconfirmed(this.batch.index);
+      const uncertain = pending.length > 0 && error.submissionStarted !== false;
       this.batch.needsConfirmation = uncertain;
+      if (uncertain) this.batch.progress.markUncertain(this.batch.index);
       this.event('failed', uncertain
         ? `该任务提交状态不明，请检查 Windows 打印队列后决定是否重打。${error.message}`
-        : `当前任务未提交，已停止后续提交。${error.message}`, { needsConfirmation: uncertain, error: error.message });
+        : pending.length ? `当前任务未提交，已停止后续提交。${error.message}`
+          : `当前任务已确认提交，但组件返回中断，已停止后续提交。${error.message}`, { needsConfirmation: uncertain, error: error.message });
     });
     return { batchId: id };
   }
@@ -103,25 +105,50 @@ export class PrintQueue {
         if (b.stopRequested) break;
       }
       const task = b.tasks[b.index];
-      for (const document of task.documents) await this.registry.assertUnchanged(document.fileId);
-      this.event('running', `正在提交任务 ${b.index + 1} / ${b.tasks.length}。`, { currentFileIds: [...new Set(task.documents.map((d) => d.fileId))] });
+      try { for (const document of task.documents) await this.registry.assertUnchanged(document.fileId); }
+      catch (error) { error.submissionStarted = false; throw error; }
+      b.progress.startTask(b.index);
+      this.event('running', '正在按清单顺序处理文件，等待 Windows 确认提交。');
       const response = await this.runNative({
         command: 'print', printerName: b.printerName, jobName: `${b.jobName} ${b.index + 1}/${b.tasks.length}`,
         settings: task.settings, documents: task.documents, copies: 1,
         startEachDocumentOnFront: false, startEachSetOnFront: false,
       }, {
         timeout: 30 * 60_000,
-        onEvent: (event) => {
-          if (event.message) this.event(null, event.message, { nativeEvent: event.event });
-        },
+        onEvent: (event) => this.nativeProgress(b, task, event),
       });
-      b.jobs.push(...(Array.isArray(response?.jobs) ? response.jobs : []));
-      for (const document of task.documents) b.submitted.set(document.fileId, (b.submitted.get(document.fileId) || 0) + 1);
+      for (const job of Array.isArray(response?.jobs) ? response.jobs : []) this.addJob(b, job);
+      // A normal final response also covers older helpers without granular events.
+      b.progress.confirm(b.index, task.documents.map((_, index) => index));
       b.index++;
-      this.event(b.stopRequested ? 'stopping' : 'running', `已提交 ${b.index} / ${b.tasks.length} 个任务。`);
+      this.event(b.stopRequested ? 'stopping' : 'running', `已确认提交 ${b.progress.submittedFiles} / ${b.progress.files.size} 个文件。`);
     }
     if (b.stopRequested) this.event('stopped', '已停止后续任务。已提交的任务仍可能继续出纸，请在 Windows 打印队列查看。');
     else this.event('submitted', '本批次已交给 Windows 打印队列。实际出纸状态请查看打印机。');
+  }
+
+  addJob(batch, job) {
+    if (!job || typeof job !== 'object') return;
+    const key = `${batch.index}:${job.groupIndex ?? 0}:${job.documentName || job.jobId || ''}`;
+    if (!batch.jobKeys.has(key)) { batch.jobKeys.add(key); batch.jobs.push({ ...job }); }
+  }
+
+  nativeProgress(batch, task, event) {
+    if (this.batch !== batch || batch.tasks[batch.index] !== task) return;
+    if (['document-processing', 'document-progress'].includes(event.event)) {
+      const previousFile = batch.progress.current;
+      if (!batch.progress.updateDocument(batch.index, event)) return;
+      const now = Date.now();
+      if (event.documentComplete || previousFile !== batch.progress.current || now - batch.lastProgressAt >= 100) {
+        batch.lastProgressAt = now;
+        this.event(null, '文件正在处理；已处理完成的文件需等待所属任务提交确认。', { nativeEvent: event.event, transient: true });
+      }
+    } else if (event.event === 'job-submitted' && event.job?.status === 'submitted') {
+      if (batch.progress.confirm(batch.index, event.job.documentIndices)) {
+        this.addJob(batch, event.job);
+        this.event(null, `已确认提交 ${batch.progress.submittedFiles} / ${batch.progress.files.size} 个文件。`, { nativeEvent: event.event });
+      }
+    } else if (event.message) this.event(null, event.message, { nativeEvent: event.event });
   }
 
   pause() {

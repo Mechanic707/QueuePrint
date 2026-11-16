@@ -16,6 +16,7 @@ let state = { selected: null, focusedFolder: null, focusType: 'all', scope: 'bat
 let dialog = null, busy = false, currentBatch = null, currentPlan = null, dragged = null, returnFocus = null;
 let toastTimer = null, saveTimer = null, previewToken = 0, pdfModule = null, pdfDocument = null, pdfFileId = null, pdfRenderTask = null, imageUrl = null, previewPage = 1;
 let externalDragDepth = 0;
+let queueFileNodes = new Map(), queueJobNodes = new Map();
 
 const files = () => orderedFiles(tree);
 const file = id => tree.files[id];
@@ -316,6 +317,7 @@ function setPreviewPage(value) { const f = file(state.selected); previewPage = M
 
 function openDialog(type, title, content, actions) {
   returnFocus = document.activeElement; dialog = type;
+  $('.qp-dialog').classList.toggle('is-progress-dialog', type === 'queue');
   $('#qp-dialog-title').textContent = title; $('#qp-dialog-eyebrow').textContent = type === 'queue' ? 'PRINT QUEUE' : 'QUEUEPRINT';
   $('#qp-dialog-body').innerHTML = content; $('#qp-dialog-actions').innerHTML = actions; $('#qp-overlay').hidden = false; icons();
   setTimeout(() => { $('#qp-dialog-actions button')?.focus(); }, 0);
@@ -347,7 +349,13 @@ function confirmPrint() {
 async function submitPrint() {
   if (dialog !== 'confirm' || !currentPlan || activeBatch()) return;
   const p = currentPlan;
-  currentBatch = { status: 'starting', taskIndex: 0, totalTasks: p.tasks.length, submittedFiles: 0, totalFiles: p.units.length, jobs: [] };
+  const fileProgress = new Map();
+  for (const unit of p.units) {
+    const f = unitFile(unit), id = unit.fileId ?? unit.id;
+    if (!fileProgress.has(id)) fileProgress.set(id, { fileId: id, name: f.name, relativePath: f.relativePath, totalUnits: 0, processedUnits: 0, submittedUnits: 0, uncertainUnits: 0 });
+    fileProgress.get(id).totalUnits++;
+  }
+  currentBatch = { status: 'starting', taskIndex: 0, totalTasks: p.tasks.length, submittedFiles: 0, totalFiles: fileProgress.size, processedFiles: 0, totalUnits: p.units.length, processedUnits: 0, submittedUnits: 0, processedPages: 0, totalPages: p.summary.pageCount ?? p.summary.pages ?? 0, currentFile: null, fileProgress: [...fileProgress.values()], jobs: [] };
   render(); showQueue();
   try {
     const result = await api.submitPrint({ ...p, printerName: state.printerName, devModeBase64: state.driverSettings[state.printerName]?.devModeBase64 || null, jobName: '序印 · 批量打印' });
@@ -355,13 +363,94 @@ async function submitPrint() {
     render(); renderQueue();
   } catch (error) { currentBatch.status = 'failed'; currentBatch.error = error.message; currentBatch.message = error.message; render(); renderQueue(); }
 }
+function progressNumber(value, fallback = 0) { return Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : fallback; }
+function setText(element, value) { const text = String(value ?? ''); if (element.textContent !== text) element.textContent = text; }
+function ensureQueueLayout() {
+  if ($('#qp-progress-shell')) return;
+  queueFileNodes = new Map(); queueJobNodes = new Map();
+  $('#qp-dialog-body').innerHTML = `<div id="qp-progress-shell"><div class="qp-file-progress-heading"><div><span>文件处理进度</span><strong id="qp-processed-files">0 / 0</strong><small>个文件</small></div><span id="qp-file-progress-percent">0%</span></div><div id="qp-file-progress-bar" class="qp-progress-track" role="progressbar" aria-label="文件处理进度" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0"><div class="qp-progress-fill"></div></div><div class="qp-file-progress-stats"><div><span>已确认提交</span><strong id="qp-submitted-files">0 / 0</strong><small>个文件</small></div><div id="qp-unit-progress-wrap"><span>已处理份次</span><strong id="qp-processed-units">0 / 0</strong><small>份次</small></div><div><span>处理页数</span><strong id="qp-processed-pages">0 / 0</strong><small>页</small></div></div><div id="qp-current-file" class="qp-current-file" hidden><div><span id="qp-current-file-label">正在处理</span><strong id="qp-current-file-name"></strong></div><p id="qp-current-file-path"></p><span id="qp-current-file-pages"></span></div><div id="qp-progress-feedback" class="qp-progress-feedback" role="status" aria-live="polite"></div><div class="qp-progress-list-title"><strong>文件清单</strong><span id="qp-progress-list-count"></span></div><ol id="qp-progress-list" class="qp-file-progress-list" aria-label="逐文件处理进度"></ol><p id="qp-progress-list-more" class="qp-progress-list-more" hidden></p><details id="qp-windows-details" class="qp-windows-details"><summary>Windows 队列详情 <span id="qp-windows-job-count"></span></summary><p id="qp-windows-task-count"></p><div id="qp-windows-jobs"></div><p class="qp-dialog-note">Windows 作业可以合并多个文件，因此作业数与文件数不同。</p></details><p id="qp-progress-notice" class="qp-dialog-note">文件处理表示已生成打印内容；已确认提交表示 Windows 已接收任务。实际出纸情况以打印机为准。</p></div>`;
+  $('#qp-dialog-actions').innerHTML = '<button id="qp-stop-progress-button" class="qp-button" data-action="stop-print">停止后续作业</button><button id="qp-close-progress-button" class="qp-button" data-action="close-dialog">返回清单</button><button id="qp-pause-progress-button" class="qp-button qp-primary" data-action="pause-print" title="当前 Windows 作业继续处理，只暂停后续作业">暂停后续作业</button>';
+}
 function renderQueue() {
   if (dialog !== 'queue' || !currentBatch) return;
-  const batch = currentBatch, total = batch.totalTasks ?? batch.taskCount ?? 0, completed = Math.max(0, Number(batch.taskIndex) || 0);
-  const label = { starting: '正在准备打印任务…', running: '正在按清单顺序提交', paused: '后续任务已暂停', stopping: '正在停止后续提交…', stopped: '已停止后续任务', submitted: '全部任务已提交至 Windows 队列', failed: '任务提交失败' }[batch.status] || batch.status;
-  const active = activeBatch();
-  $('#qp-dialog-body').innerHTML = `<div class="qp-progress-heading"><span aria-live="polite">${esc(label)}</span><span>${Math.min(completed, total)} / ${total}</span></div><div class="qp-progress-track" role="progressbar" aria-label="任务提交进度" aria-valuemin="0" aria-valuemax="${Math.max(1, total)}" aria-valuenow="${Math.min(completed, total)}"><div class="qp-progress-fill" style="width:${total ? Math.min(100, completed / total * 100) : 0}%"></div></div>${batch.message || batch.error ? `<div class="${batch.status === 'failed' ? 'qp-dialog-errors' : 'qp-dialog-subtitle'}">${esc(batch.message || batch.error)}</div>` : ''}${(batch.jobs || []).map((job, index) => `<div class="qp-batch-job"><span>任务 ${index + 1}${job.jobId ? ` · Windows #${esc(job.jobId)}` : ''}<small>${job.documentName ? ' · ' + esc(job.documentName) : ''}</small></span><span>${esc(job.status || '已入队')}</span></div>`).join('')}<p class="qp-dialog-note">“已提交”表示 Windows 打印队列已接收任务，实际出纸情况以打印机为准。${batch.needsConfirmation || batch.status === 'failed' ? '<br>提交状态不明的任务不会自动重试，请先核对 Windows 队列和已输出材料。' : active ? '<br>暂停会阻止后续任务提交；当前已入队任务可能继续输出。' : ''}</p>`;
-  $('#qp-dialog-actions').innerHTML = active ? `<button class="qp-button" data-action="stop-print" ${batch.status === 'stopping' ? 'disabled' : ''}>停止后续</button><button class="qp-button" data-action="close-dialog">返回清单</button><button class="qp-button qp-primary" data-action="${batch.status === 'paused' ? 'resume-print' : 'pause-print'}" ${batch.status === 'stopping' || batch.status === 'starting' ? 'disabled' : ''}>${batch.status === 'paused' ? '继续提交' : '暂停后续'}</button>` : '<button class="qp-button qp-primary" data-action="close-dialog">返回清单</button>';
+  ensureQueueLayout();
+  const batch = currentBatch, active = activeBatch();
+  const entries = (Array.isArray(batch.fileProgress) ? batch.fileProgress : []).map(entry => {
+    const totalUnits = Math.max(1, progressNumber(entry.totalUnits, 1));
+    const submittedUnits = Math.min(totalUnits, progressNumber(entry.submittedUnits));
+    return { ...entry, totalUnits, submittedUnits, processedUnits: Math.min(totalUnits, Math.max(submittedUnits, progressNumber(entry.processedUnits))), uncertainUnits: Math.min(totalUnits, progressNumber(entry.uncertainUnits)) };
+  });
+  const totalFiles = Math.max(entries.length, progressNumber(batch.totalFiles));
+  const processedFiles = Math.min(totalFiles, progressNumber(batch.processedFiles, entries.filter(entry => entry.processedUnits >= entry.totalUnits).length));
+  const submittedFiles = Math.min(totalFiles, progressNumber(batch.submittedFiles, entries.filter(entry => entry.submittedUnits >= entry.totalUnits).length));
+  const totalUnits = progressNumber(batch.totalUnits, entries.reduce((sum, entry) => sum + entry.totalUnits, 0));
+  const processedUnits = Math.min(totalUnits, progressNumber(batch.processedUnits, entries.reduce((sum, entry) => sum + entry.processedUnits, 0)));
+  const percent = totalFiles ? Math.floor(processedFiles / totalFiles * 100) : 0;
+  setText($('#qp-processed-files'), `${processedFiles} / ${totalFiles}`);
+  setText($('#qp-submitted-files'), `${submittedFiles} / ${totalFiles}`);
+  setText($('#qp-processed-units'), `${processedUnits} / ${totalUnits}`);
+  setText($('#qp-processed-pages'), `${progressNumber(batch.processedPages)} / ${progressNumber(batch.totalPages)}`);
+  setText($('#qp-file-progress-percent'), percent + '%');
+  $('#qp-unit-progress-wrap').hidden = totalUnits <= totalFiles;
+  const bar = $('#qp-file-progress-bar'); bar.setAttribute('aria-valuemax', String(Math.max(1, totalFiles))); bar.setAttribute('aria-valuenow', String(processedFiles)); bar.querySelector('.qp-progress-fill').style.width = percent + '%';
+  const current = batch.currentFile;
+  $('#qp-current-file').hidden = !current;
+  if (current) {
+    setText($('#qp-current-file-label'), active && batch.status !== 'paused' ? '正在处理' : '最近处理');
+    setText($('#qp-current-file-name'), current.name || file(current.fileId)?.name || '文件');
+    setText($('#qp-current-file-path'), current.relativePath || file(current.fileId)?.relativePath || '');
+    const copy = `第 ${Math.max(1, progressNumber(current.copyIndex, 1))} / ${Math.max(1, progressNumber(current.totalUnits, 1))} 份`;
+    const pages = current.blank ? '补入空白背面' : `内容页 ${progressNumber(current.processedPages)} / ${progressNumber(current.contentPages)} 页`;
+    setText($('#qp-current-file-pages'), [current.setIndex ? `第 ${current.setIndex} 套` : '', copy, pages].filter(Boolean).join(' · '));
+  }
+  const label = { starting: '正在准备文件与打印设置…', running: totalFiles > 0 && processedFiles === totalFiles && submittedFiles < totalFiles ? '文件已处理，等待 Windows 确认提交。' : '正在处理文件，按清单顺序提交。', paused: '后续 Windows 作业已暂停；当前已入队内容可能继续输出。', stopping: '正在停止后续作业，当前作业仍可能继续处理。', stopped: '已停止后续作业，请核对已确认提交的文件。', submitted: submittedFiles === totalFiles ? '全部文件已确认提交至 Windows 队列。' : '批次已结束，仍有文件未确认提交，请核对队列。', failed: batch.message || batch.error || '提交失败，请核对 Windows 队列与已输出材料。' }[batch.status] || batch.message || '';
+  setText($('#qp-progress-feedback'), label);
+  $('#qp-progress-feedback').classList.toggle('is-error', batch.status === 'failed' || !!batch.needsConfirmation);
+  const displayed = entries.slice(0, 100), visibleIds = new Set(displayed.map(entry => String(entry.fileId)));
+  for (const [id, node] of queueFileNodes) if (!visibleIds.has(id)) { node.remove(); queueFileNodes.delete(id); }
+  const list = $('#qp-progress-list');
+  displayed.forEach((entry, index) => {
+    const id = String(entry.fileId);
+    let node = queueFileNodes.get(id);
+    if (!node) {
+      node = document.createElement('li'); node.dataset.progressFile = id;
+      node.innerHTML = '<span class="qp-progress-file-number"></span><div class="qp-progress-file-content"><strong></strong><span class="qp-progress-file-path"></span><small></small></div><span class="qp-progress-file-state"></span>';
+      queueFileNodes.set(id, node);
+    }
+    if (list.children[index] !== node) list.insertBefore(node, list.children[index] || null);
+    const pending = entry.submittedUnits < entry.totalUnits;
+    const stateName = entry.uncertainUnits > 0 ? 'uncertain' : !pending ? 'submitted' : entry.processedUnits >= entry.totalUnits ? 'processed' : current?.fileId === entry.fileId && ['running', 'stopping'].includes(batch.status) ? 'running' : entry.submittedUnits > 0 ? 'partial-submitted' : entry.processedUnits > 0 ? 'partial-processed' : 'waiting';
+    node.dataset.state = stateName;
+    setText(node.querySelector('.qp-progress-file-number'), index + 1);
+    setText(node.querySelector('strong'), entry.name || file(entry.fileId)?.name || '文件');
+    setText(node.querySelector('.qp-progress-file-path'), entry.relativePath || file(entry.fileId)?.relativePath || '');
+    setText(node.querySelector('small'), `已处理 ${entry.processedUnits}/${entry.totalUnits} 份 · 已确认提交 ${entry.submittedUnits}/${entry.totalUnits} 份${entry.uncertainUnits ? ` · ${entry.uncertainUnits} 份待核对` : ''}`);
+    setText(node.querySelector('.qp-progress-file-state'), { uncertain: '待核对', submitted: '已提交', processed: '已处理待提交', running: '处理中', 'partial-submitted': '部分已提交', 'partial-processed': '部分已处理', waiting: '待处理' }[stateName]);
+  });
+  setText($('#qp-progress-list-count'), `${totalFiles} 个源文件`);
+  $('#qp-progress-list-more').hidden = totalFiles <= displayed.length;
+  setText($('#qp-progress-list-more'), `仅显示前 ${displayed.length} 个文件，另 ${Math.max(0, totalFiles - displayed.length)} 个文件计入总体进度。`);
+  const jobs = Array.isArray(batch.jobs) ? batch.jobs : [], tasks = progressNumber(batch.totalTasks ?? batch.taskCount), completedTasks = Math.min(tasks, progressNumber(batch.taskIndex));
+  const confirmedTasks = Math.min(tasks, Math.max(completedTasks, jobs.filter(job => job.status === 'submitted').length));
+  setText($('#qp-windows-job-count'), `${jobs.length} 个作业`);
+  setText($('#qp-windows-task-count'), `Windows 作业：${confirmedTasks} / ${tasks} 已确认提交`);
+  const jobIds = new Set();
+  jobs.forEach((job, index) => {
+    const id = `${index}:${job.jobId || ''}`; jobIds.add(id);
+    let node = queueJobNodes.get(id);
+    if (!node) { node = document.createElement('div'); node.className = 'qp-batch-job'; node.innerHTML = '<span><strong></strong><small></small></span><span class="qp-windows-job-state"></span>'; queueJobNodes.set(id, node); $('#qp-windows-jobs').append(node); }
+    setText(node.querySelector('strong'), `作业 ${index + 1}${job.jobId ? ` · Windows #${job.jobId}` : ''}`);
+    setText(node.querySelector('small'), job.documentName || '');
+    setText(node.querySelector('.qp-windows-job-state'), { submitted: '已提交', queued: '已入队', spooling: '入队中', failed: '失败', unknown: '待核对' }[job.status] || job.status || '已提交');
+  });
+  for (const [id, node] of queueJobNodes) if (!jobIds.has(id)) { node.remove(); queueJobNodes.delete(id); }
+  setText($('#qp-progress-notice'), '文件处理表示已生成打印内容；已确认提交表示 Windows 已接收任务。实际出纸情况以打印机为准。' + (batch.needsConfirmation || batch.status === 'failed' ? ' 提交状态不明的任务不会自动重试，请先核对队列与已输出材料。' : active ? ' 暂停仅阻止后续 Windows 作业，当前作业可能继续处理和输出。' : ''));
+  $('#qp-stop-progress-button').hidden = !active; $('#qp-pause-progress-button').hidden = !active;
+  $('#qp-stop-progress-button').disabled = batch.status === 'stopping';
+  $('#qp-pause-progress-button').disabled = ['starting', 'stopping'].includes(batch.status);
+  $('#qp-pause-progress-button').dataset.action = batch.status === 'paused' ? 'resume-print' : 'pause-print';
+  setText($('#qp-pause-progress-button'), batch.status === 'paused' ? '继续提交' : '暂停后续作业');
+  $('#qp-close-progress-button').classList.toggle('qp-primary', !active);
 }
 function showQueue() { if (!currentBatch) { announce('尚未提交打印任务'); return; } openDialog('queue', '打印队列', '', ''); renderQueue(); }
 async function queueAction(action) {

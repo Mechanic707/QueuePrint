@@ -87,14 +87,42 @@ Assert-True ([Math]::Abs($taskInspect.data.files[1].width - 200) -lt 1) 'Image D
 Assert-True ($null -ne $taskInspect.data.files[2].error) 'Per-file inspect errors must not abort a batch'
 
 $taskDocuments = @(
-    @{ path = $taskPdfPath; pages = @(3, 1, 2); appendBlank = $true; startOnFront = $true },
-    @{ path = $taskPngPath; pages = @(1); appendBlank = $false; startOnFront = $true }
+    @{ path = $taskPdfPath; fileId = 'pdf-a'; pages = @(3, 1, 2); appendBlank = $true; startOnFront = $true },
+    @{ path = $taskPngPath; fileId = 'image-b'; pages = @(1); appendBlank = $false; startOnFront = $true }
 )
 $taskPlan = Invoke-NativeReadOnly @{ command = 'plan'; settings = @{ duplex = 'longEdge'; scale = 'shrink' }; documents = $taskDocuments; copies = 2; copyMode = 'set' }
 Assert-True ($taskPlan.data.jobs.Count -eq 2) 'Sets must have separate jobs'
 Assert-True ($taskPlan.data.pageCount -eq 10) 'Explicit blank/copy expansion mismatch'
 Assert-True (($taskPlan.data.jobs[0].pages[0..2].page -join ',') -eq '3,1,2') 'Explicit source page order changed'
 Assert-True ($taskPlan.data.jobs[0].pages[3].blank) 'Explicit blank missing'
+Assert-True (($taskPlan.data.jobs.groupIndex -join ',') -eq '0,1') 'Group indices must identify each set job'
+foreach ($taskJob in $taskPlan.data.jobs) {
+    Assert-True (($taskJob.documentIndices -join ',') -eq '0,1') 'Job document indices must be distinct and preserve request order'
+    Assert-True (($taskJob.pages[0..3].documentIndex -join ',') -eq '0,0,0,0') 'Explicit blank must retain its source document identity'
+    Assert-True (($taskJob.pages[0..3].fileId -join ',') -eq 'pdf-a,pdf-a,pdf-a,pdf-a') 'PDF file identity must survive planning'
+    Assert-True (($taskJob.pages[0..3].processedPagesBefore -join ',') -eq '0,1,2,3') 'Pre-draw content counters mismatch'
+    Assert-True (($taskJob.pages[0..3].processedPages -join ',') -eq '1,2,3,3') 'Blank page must not increase the content-page counter'
+    Assert-True (($taskJob.pages[0..3].contentPages -join ',') -eq '3,3,3,3') 'Selected content-page totals mismatch'
+    Assert-True (-not $taskJob.pages[2].documentComplete -and $taskJob.pages[3].documentComplete) 'Document cannot finish before its explicit blank is processed'
+    Assert-True ($taskJob.pages[4].documentIndex -eq 1 -and $taskJob.pages[4].fileId -eq 'image-b') 'Image source document identity mismatch'
+    Assert-True ($taskJob.pages[4].processedPagesBefore -eq 0 -and $taskJob.pages[4].processedPages -eq 1 -and $taskJob.pages[4].documentComplete) 'An unpadded single-page document must finish after drawing its content page'
+}
+
+# Repeated paths and repeated source page numbers are separate document occurrences.
+# Validate event metadata through the read-only plan command; never invoke print.
+$taskRepeated = Invoke-NativeReadOnly @{ command = 'plan'; settings = @{ duplex = 'longEdge' }; documents = @(
+    @{ path = $taskPdfPath; fileId = 'shared-pdf'; pages = @(3, 1, 3); appendBlank = $true; startOnFront = $true },
+    @{ path = $taskPdfPath; fileId = 'shared-pdf'; pages = @(2); appendBlank = $true; startOnFront = $true },
+    @{ path = $taskPngPath; fileId = 'image-b'; pages = @(1); startOnFront = $true }
+) }
+Assert-True ($taskRepeated.data.jobs.Count -eq 1 -and $taskRepeated.data.pageCount -eq 7) 'Progress metadata must not change merged-job grouping or page counts'
+$taskRepeatedPages = $taskRepeated.data.jobs[0].pages
+Assert-True (($taskRepeated.data.jobs[0].documentIndices -join ',') -eq '0,1,2') 'Repeated source paths must remain distinct request document indices'
+Assert-True (($taskRepeatedPages.documentIndex -join ',') -eq '0,0,0,0,1,1,2') 'Source-document boundaries changed'
+Assert-True (($taskRepeatedPages[0..2].page -join ',') -eq '3,1,3') 'Repeated source-page selections must remain in their requested order'
+Assert-True (($taskRepeatedPages[0..2].processedPages -join ',') -eq '1,2,3') 'Progress must use selected-page order, not original PDF page numbers'
+Assert-True ($taskRepeatedPages[4].fileId -eq 'shared-pdf' -and $taskRepeatedPages[4].processedPagesBefore -eq 0 -and $taskRepeatedPages[4].contentPages -eq 1) 'Same-file occurrences must reset their own content progress'
+Assert-True (-not $taskRepeatedPages[4].documentComplete -and $taskRepeatedPages[5].documentComplete -and $taskRepeatedPages[5].processedPages -eq 1) 'Repeated occurrence must finish only after its own blank'
 $taskBadPlan = Invoke-NativeReadOnly -AllowFailure @{ command = 'plan'; settings = @{ duplex = 'longEdge' }; documents = @(
     @{ path = $taskPdfPath; pages = @(1); startOnFront = $true },
     @{ path = $taskPngPath; pages = @(1); startOnFront = $true }
@@ -106,6 +134,8 @@ $taskSplit = Invoke-NativeReadOnly @{ command = 'plan'; settings = @{ duplex = '
     @{ path = $taskPdfPath; pages = @(2); settings = @{ color = $false } }
 ) }
 Assert-True ($taskSplit.data.jobs.Count -eq 3) 'Nonadjacent settings must not be regrouped out of order'
+Assert-True (($taskSplit.data.jobs.groupIndex -join ',') -eq '0,1,2') 'Settings changes must keep group indices in print order'
+Assert-True (((($taskSplit.data.jobs | ForEach-Object { $_.documentIndices -join ',' }) -join ';')) -eq '0;1;2') 'Original request indices must survive settings-based splitting'
 
 $taskRenderPath = Join-Path $taskFixtures 'pdf-render-check.png'
 $taskRender = Invoke-NativeReadOnly @{ command = 'render'; paths = @($taskPdfPath); pageNumber = 2; renderDpi = 96; outputPath = $taskRenderPath }
@@ -132,6 +162,6 @@ if ($taskPrinterSummary.Count -gt 0) {
     Write-Output ('Read-only DEVMODE settings: ' + ($taskDecoded.data.settings | ConvertTo-Json -Compress))
 }
 }
-Write-Output 'PASS: native ping, PDF/image inspect, per-file errors, ordered duplex plan, copy/set jobs, settings boundaries and PDF rasterization. No print/properties/cancel command was invoked.'
+Write-Output 'PASS: native ping, PDF/image inspect, per-file errors, ordered duplex plan, copy/set jobs, settings boundaries, document progress metadata and PDF rasterization. No print/properties/cancel command was invoked.'
 if ($SkipPrinterChecks) { Write-Output 'Printer enumeration and DEVMODE checks were explicitly skipped.' }
 else { Write-Output 'PASS: printer enumeration, read-only jobs and DEVMODE decode/round-trip.' }
