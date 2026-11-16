@@ -26,6 +26,7 @@ python .\tests\image_smoke.py
 | --- | --- | --- |
 | `ping` | 无 | 协议及助手版本 |
 | `printers` | 无 | `{printers:[...]}`；名称、默认状态、彩色/双面能力、默认设置、纸型和纸盒 |
+| `page-layout` | `printerName`、可选 `settings` | 只读查询有效纸张与硬件可打印区域；返回 `{paper:{width,height},printableArea:{x,y,width,height},landscape,dimensionUnit:"hundredths-inch"}`；不弹窗口、不改默认值、不创建作业 |
 | `properties` | `printerName`、可选 `devModeBase64`、`ownerWindow` | 打开该打印机驱动属性窗口；`{cancelled:false,devModeBase64,printerName,settings:{paper,color,duplex,orientation}}` 或 `{cancelled:true}`；settings 使用 UI 的 mono/color、simplex/long/short 语义 |
 | `decode-settings` | `printerName`、可选 `devModeBase64` | 只读解码已保存属性，省略属性则读取驱动默认，返回 `{printerName,devModeBase64,settings:{paper,color,duplex,orientation}}`；不弹窗口、不改默认值、不打印 |
 | `inspect` | `paths:[绝对路径]` | `{files:[{path,kind,pages,width,height,dimensionUnit,canPrint,error?}]}`；单项失败不会中断其他文件 |

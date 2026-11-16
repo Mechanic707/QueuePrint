@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { runNative, findNativeHost } from './native-host.mjs';
 import { FileRegistry } from './files.mjs';
-import { PrintQueue } from './print-queue.mjs';
+import { PrintQueue, nativeSettings } from './print-queue.mjs';
 import { isSameRendererUrl } from './renderer-url.mjs';
 
 const mainDir = path.dirname(fileURLToPath(import.meta.url));
@@ -96,6 +96,11 @@ function registerIpc() {
     return registry.importDroppedPaths(paths);
   });
   handle('qp:file-bytes', (id) => registry.bytes(id));
+  handle('qp:page-layout', async (value) => {
+    if (!printerCache.some((p) => p.name === value?.printerName)) throw new Error('请选择有效的打印机。');
+    return native({ command: 'page-layout', printerName: value.printerName,
+      settings: nativeSettings(value.settings, value.devModeBase64) }, { timeout: 15_000 });
+  });
   handle('qp:preferences-load', loadPreferences);
   handle('qp:preferences-save', savePreferences);
   handle('qp:printer-properties', async (value) => {

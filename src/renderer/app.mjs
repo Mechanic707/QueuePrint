@@ -17,7 +17,7 @@ let state = { selected: null, focusedFolder: null, focusType: 'all', scope: 'bat
 let dialog = null, busy = false, currentBatch = null, currentPlan = null, dragged = null, returnFocus = null;
 let toastTimer = null, saveTimer = null;
 let externalDragDepth = 0;
-let queueFileNodes = new Map(), queueJobNodes = new Map();
+let queueFileNodes = new Map(), queueJobNodes = new Map(), queueRenderFrame = 0;
 const preview = createPreviewController({ root, api, onSelectFile: focusFile });
 
 const files = () => orderedFiles(tree);
@@ -141,8 +141,11 @@ function renderTotals() {
   $('#qp-preview-view').hidden = state.view !== 'preview';
   renderPreview();
   $$('[data-action^="view-"]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.action === 'view-' + state.view)));
+  renderBatchStatus();
+}
+function renderBatchStatus() {
   const batchLabel = { starting: '正在准备打印…', running: '正在有序提交', paused: '后续任务已暂停', stopping: '正在停止后续任务…', stopped: '已停止后续任务', submitted: '任务已提交至 Windows 队列', failed: '提交失败，请核对队列' };
-  $('#qp-batch-status').textContent = currentBatch ? batchLabel[currentBatch.status] || currentBatch.status : '尚未提交打印任务';
+  setText($('#qp-batch-status'), currentBatch ? batchLabel[currentBatch.status] || currentBatch.status : '尚未提交打印任务');
 }
 function render() { renderTree(); renderRows(); renderSettings(); renderTotals(); icons(); }
 function update() { invalidatePlan(); render(); savePreferences(); }
@@ -258,7 +261,12 @@ function removeFocused() {
   update(); if (state.view === 'preview') renderPreview(); announce(`已从清单移出 ${removeIds.length} 个文件，原文件保留`);
 }
 
-function renderPreview() { preview.sync({ files: files(), selectedId: state.selected, visible: state.view === 'preview' }); }
+function renderPreview() {
+  const selected = file(state.selected);
+  preview.sync({ files: files(), selectedId: state.selected, visible: state.view === 'preview',
+    settings: selected ? effective(selected) : state.globalSettings, printer: activePrinter(),
+    devModeBase64: state.driverSettings[state.printerName]?.devModeBase64 });
+}
 function setPreviewPage(value) { preview.setPage(value); }
 
 function openDialog(type, title, content, actions) {
@@ -340,7 +348,11 @@ function renderQueue() {
   $('#qp-unit-progress-wrap').hidden = totalUnits <= totalFiles;
   const bar = $('#qp-file-progress-bar'); bar.setAttribute('aria-valuemax', String(Math.max(1, totalFiles))); bar.setAttribute('aria-valuenow', String(processedFiles)); bar.querySelector('.qp-progress-fill').style.width = percent + '%';
   const current = batch.currentFile;
-  $('#qp-current-file').hidden = !current;
+  // A completed document has no currentFile until the next document starts.
+  // Keep this status slot in the layout so each file boundary cannot move the
+  // centered dialog or the list the user is reading.
+  $('#qp-current-file').hidden = false;
+  $('#qp-current-file').dataset.idle = String(!current);
   if (current) {
     setText($('#qp-current-file-label'), active && batch.status !== 'paused' ? '正在处理' : '最近处理');
     setText($('#qp-current-file-name'), current.name || file(current.fileId)?.name || '文件');
@@ -348,6 +360,12 @@ function renderQueue() {
     const copy = `第 ${Math.max(1, progressNumber(current.copyIndex, 1))} / ${Math.max(1, progressNumber(current.totalUnits, 1))} 份`;
     const pages = current.blank ? '补入空白背面' : `内容页 ${progressNumber(current.processedPages)} / ${progressNumber(current.contentPages)} 页`;
     setText($('#qp-current-file-pages'), [current.setIndex ? `第 ${current.setIndex} 套` : '', copy, pages].filter(Boolean).join(' · '));
+  } else {
+    const idle = { starting: '正在准备文件', paused: '已暂停后续作业', stopping: '正在停止后续作业', stopped: '已停止文件处理', submitted: '本批次文件已处理完毕', failed: '本批次已停止处理' }[batch.status] || (processedFiles === totalFiles ? '文件已处理，等待确认提交' : '等待处理下一个文件');
+    setText($('#qp-current-file-label'), active ? '处理状态' : '本批次');
+    setText($('#qp-current-file-name'), idle);
+    setText($('#qp-current-file-path'), '当前没有正在处理的文件');
+    setText($('#qp-current-file-pages'), `已处理 ${progressNumber(batch.processedPages)} / ${progressNumber(batch.totalPages)} 页`);
   }
   const label = { starting: '正在准备文件与打印设置…', running: totalFiles > 0 && processedFiles === totalFiles && submittedFiles < totalFiles ? '文件已处理，等待 Windows 确认提交。' : '正在处理文件，按清单顺序提交。', paused: '后续 Windows 作业已暂停；当前已入队内容可能继续输出。', stopping: '正在停止后续作业，当前作业仍可能继续处理。', stopped: '已停止后续作业，请核对已确认提交的文件。', submitted: submittedFiles === totalFiles ? '全部文件已确认提交至 Windows 队列。' : '批次已结束，仍有文件未确认提交，请核对队列。', failed: batch.message || batch.error || '提交失败，请核对 Windows 队列与已输出材料。' }[batch.status] || batch.message || '';
   setText($('#qp-progress-feedback'), label);
@@ -399,6 +417,10 @@ function renderQueue() {
   $('#qp-close-progress-button').classList.toggle('qp-primary', !active);
 }
 function showQueue() { if (!currentBatch) { announce('尚未提交打印任务'); return; } openDialog('queue', '打印队列', '', ''); renderQueue(); }
+function scheduleQueueRender() {
+  if (queueRenderFrame || dialog !== 'queue') return;
+  queueRenderFrame = requestAnimationFrame(() => { queueRenderFrame = 0; renderQueue(); });
+}
 async function queueAction(action) {
   try {
     if (action === 'pause-print') await api.pausePrint();
@@ -514,16 +536,22 @@ root.addEventListener('keydown', event => {
   if (event.key === 'Escape') { event.preventDefault(); closeDialog(); }
   if (event.key === 'Tab') { const elements = [...$('#qp-overlay').querySelectorAll('button:not([disabled]),input,select')].filter(el => !el.hidden), first = elements[0], last = elements.at(-1); if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); } }
 });
-window.addEventListener('beforeunload', () => { clearTimeout(saveTimer); preview.dispose(); });
+window.addEventListener('beforeunload', () => { clearTimeout(saveTimer); cancelAnimationFrame(queueRenderFrame); preview.dispose(); });
 
 async function initialize() {
   render();
   if (!api) { runtime('本地打印组件未连接。请通过“序印”桌面程序启动。', true); $('#qp-printer').innerHTML = '<option value="">本地组件未连接</option>'; renderSettings(); return; }
   api.onPrintProgress(progress => {
     if (currentBatch?.batchId && progress.batchId && currentBatch.batchId !== progress.batchId) return;
+    const wasActive = activeBatch(), previousStatus = currentBatch?.status;
     currentBatch = { ...currentBatch, ...progress };
-    renderSettings(); renderTotals(); renderQueue();
-    if (progress.status === 'submitted') announce('所有任务已提交至 Windows 打印队列');
+    // Page events only change the queue. Rebuilding printer settings and
+    // recalculating the complete print plan for every page repaints the blurred
+    // workbench behind the dialog and needlessly competes with progress frames.
+    if (wasActive !== activeBatch()) { renderSettings(); renderTotals(); }
+    else if (previousStatus !== currentBatch.status) renderBatchStatus();
+    scheduleQueueRender();
+    if (progress.status === 'submitted' && previousStatus !== 'submitted') announce('所有任务已提交至 Windows 打印队列');
     if (progress.status === 'failed' && dialog !== 'queue') { showQueue(); }
   });
   try {

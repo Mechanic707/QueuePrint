@@ -29,6 +29,7 @@ const root = path.resolve(__dirname, '..');
     assert.deepEqual(names.slice(0, 3), ['1_审批单.pdf', '2_发票.pdf', '10_附件.pdf']);
     assert.equal(await page.locator('#qp-total-pages').innerText(), '12');
     await page.locator('[data-action="view-preview"]').click();
+    await page.locator('#qp-preview-mode').selectOption('source');
     await page.locator('#qp-pdf-canvas').waitFor({ state: 'visible', timeout: 30_000 });
     await page.waitForFunction(() => document.querySelector('#qp-preview-view').dataset.loading === 'false');
     const canvas = await page.locator('#qp-pdf-canvas').evaluate((element) => ({ width: element.width, height: element.height }));

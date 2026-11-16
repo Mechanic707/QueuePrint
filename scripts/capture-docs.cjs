@@ -47,6 +47,12 @@ const demoPrinters = [
       if (process.env.QUEUEPRINT_QA !== '1') throw new Error('Documentation capture requires isolated QA mode.');
       ipcMain.removeHandler('qp:printers');
       ipcMain.handle('qp:printers', async () => printers);
+      ipcMain.removeHandler('qp:page-layout');
+      ipcMain.handle('qp:page-layout', (_event, value) => {
+        const landscape = value.settings.orientation === 'landscape';
+        const paper = landscape ? { width: 1169, height: 827 } : { width: 827, height: 1169 };
+        return { paper, printableArea: { x: 20, y: 20, width: paper.width - 40, height: paper.height - 40 }, landscape, dimensionUnit: 'hundredths-inch' };
+      });
       nativeTheme.themeSource = 'light';
       const window = BrowserWindow.getAllWindows()[0];
       window.setContentSize(1360, 960);
@@ -107,11 +113,10 @@ const demoPrinters = [
 
     await page.locator('[data-action="view-preview"]').click();
     await page.locator('#qp-pdf-canvas').waitFor({ state: 'visible', timeout: 30_000 });
-    await page.locator('#qp-zoom-percent').fill('50');
-    await page.locator('#qp-zoom-percent').press('Enter');
+    await page.locator('#qp-preview-fit-page').click();
     await page.waitForFunction(() => {
       const canvas = document.querySelector('#qp-pdf-canvas');
-      return document.querySelector('#qp-preview-view').dataset.loading === 'false' && !canvas.hidden && canvas.getBoundingClientRect().width > 250 && canvas.getBoundingClientRect().width < 350;
+      return document.querySelector('#qp-preview-view').dataset.loading === 'false' && document.querySelector('#qp-preview-content').dataset.geometrySource === 'driver' && !canvas.hidden;
     });
     const canvas = await page.locator('#qp-pdf-canvas').evaluate(element => ({
       width: element.width, height: element.height,

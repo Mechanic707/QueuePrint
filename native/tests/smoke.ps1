@@ -8,7 +8,7 @@ New-Item -ItemType Directory -Path $taskFixtures -Force | Out-Null
 
 function Invoke-NativeReadOnly($Request, [switch]$AllowFailure) {
     # Deliberately cannot exercise print/properties/cancel from this safety test.
-    if ($Request.command -notin @('ping','inspect','plan','render','printers','jobs','decode-settings')) { throw 'Unsafe test command.' }
+    if ($Request.command -notin @('ping','inspect','plan','render','printers','jobs','decode-settings','page-layout')) { throw 'Unsafe test command.' }
     $taskProcessInfo = New-Object System.Diagnostics.ProcessStartInfo
     $taskProcessInfo.FileName = $taskHostPath
     $taskProcessInfo.UseShellExecute = $false
@@ -157,6 +157,13 @@ if ($taskPrinterSummary.Count -gt 0) {
     Assert-True ($taskDecoded.data.settings.duplex -in @('simplex','long','short')) 'DEVMODE duplex decode failed'
     Assert-True ($taskDecoded.data.settings.color -in @('mono','color')) 'DEVMODE color decode failed'
     Assert-True (-not [string]::IsNullOrWhiteSpace($taskDecoded.data.settings.paper)) 'DEVMODE paper decode failed'
+    $taskPageLayout = Invoke-NativeReadOnly @{ command = 'page-layout'; printerName = $taskPrinterSummary[0].name; settings = @{ orientation = 'portrait' } }
+    Assert-True ($taskPageLayout.data.dimensionUnit -eq 'hundredths-inch') 'Page layout units are not physical printer units'
+    Assert-True ($taskPageLayout.data.paper.width -gt 0 -and $taskPageLayout.data.paper.height -gt 0) 'Page layout paper dimensions are invalid'
+    Assert-True ($taskPageLayout.data.printableArea.width -gt 0 -and $taskPageLayout.data.printableArea.height -gt 0) 'Page layout printable area is invalid'
+    $taskLandscapeLayout = Invoke-NativeReadOnly @{ command = 'page-layout'; printerName = $taskPrinterSummary[0].name; settings = @{ orientation = 'landscape' } }
+    Assert-True ($taskLandscapeLayout.data.landscape -eq $true) 'Page layout did not apply landscape'
+    Assert-True ($taskLandscapeLayout.data.paper.width -eq $taskPageLayout.data.paper.height -and $taskLandscapeLayout.data.paper.height -eq $taskPageLayout.data.paper.width) 'Landscape page bounds did not rotate'
     $taskRoundTrip = Invoke-NativeReadOnly @{ command = 'decode-settings'; printerName = $taskPrinterSummary[0].name; devModeBase64 = $taskDecoded.data.devModeBase64 }
     Assert-True (($taskDecoded.data.settings | ConvertTo-Json -Compress) -eq ($taskRoundTrip.data.settings | ConvertTo-Json -Compress)) 'DEVMODE basic settings round-trip changed values'
     Write-Output ('Read-only DEVMODE settings: ' + ($taskDecoded.data.settings | ConvertTo-Json -Compress))

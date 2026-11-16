@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('queueprint', {
     return ipcRenderer.invoke('qp:import-dropped', [...new Set(paths)]);
   },
   getFileBytes: invoke('qp:file-bytes'),
+  getPageLayout: invoke('qp:page-layout'),
   loadPreferences: invoke('qp:preferences-load'),
   savePreferences: invoke('qp:preferences-save'),
   showPrinterProperties: invoke('qp:printer-properties'),

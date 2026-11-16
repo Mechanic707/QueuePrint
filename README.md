@@ -8,10 +8,10 @@
 
 面向 Windows 的本地批量打印工具。混合导入 PDF 与图片，保留子文件夹分组，核对顺序后一次提交。
 
-[![Version](https://img.shields.io/badge/version-0.1.5-4564e8?style=flat-square)](https://github.com/Mechanic707/QueuePrint/releases)
+[![Version](https://img.shields.io/badge/version-0.1.6-4564e8?style=flat-square)](https://github.com/Mechanic707/QueuePrint/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078d4?style=flat-square)](#安装与启动)
 [![License](https://img.shields.io/badge/license-MIT-258a69?style=flat-square)](LICENSE)
-[![Tests](https://img.shields.io/badge/Node%20tests-67%20passed-258a69?style=flat-square)](#测试与验证)
+[![Tests](https://img.shields.io/badge/Node%20tests-80%20passed-258a69?style=flat-square)](#测试与验证)
 [![Windows checks](https://github.com/Mechanic707/QueuePrint/actions/workflows/ci.yml/badge.svg)](https://github.com/Mechanic707/QueuePrint/actions/workflows/ci.yml)
 
 [**下载 Windows 版**](https://github.com/Mechanic707/QueuePrint/releases/latest) · [快速开始](#快速开始) · [功能一览](#功能一览) · [开发与构建](#开发与构建) · [提交问题](https://github.com/Mechanic707/QueuePrint/issues)
@@ -43,7 +43,8 @@
 | 打印机与常用属性 | 选择 Windows 打印队列，设置纸张、方向、色彩、单双面和缩放 |
 | 三级设置范围 | 整批 → 文件夹 → 单文件逐项继承，可恢复上级设置 |
 | 厂家高级属性 | 打开真实驱动属性窗口，保留纸盒等驱动私有设置 |
-| 内容预览 | 在预览中切换文件与页码，输入缩放比例、Ctrl＋滚轮缩放与拖拽查看 |
+| 纸张效果预览 | 默认完整显示 A4 等纸张，实时联动纸型、方向及打印缩放，显示可打印边距与裁切提示 |
+| 原文件预览 | 切换文件与页码，输入缩放比例、Ctrl＋滚轮缩放与拖拽查看 |
 | PDF 页码范围 | 例如 `1-3, 5`，按所选页面生成打印计划 |
 | 双面文件边界 | 默认每个文件从新纸开始，按需预留空白背面，每套独立起纸 |
 | 提交控制 | 打印前确认，按序提交，暂停或停止后续任务 |
@@ -58,9 +59,9 @@
 
 ![文件夹拖入落点](docs/images/folder-drop.png)
 
-### 打印前核对 PDF 内容
+### 打印前核对 A4 纸张效果
 
-![PDF 内容预览](docs/images/preview.png)
+![A4 打印纸张效果预览](docs/images/preview.png)
 
 </details>
 
@@ -69,17 +70,17 @@
 在 [Releases](https://github.com/Mechanic707/QueuePrint/releases/latest) 下载 Windows x64 免安装包：
 
 ```text
-QueuePrint-0.1.5-win-x64.exe
+QueuePrint-0.1.6-win-x64.exe
 ```
 
 打开即可使用。发布包已包含 Electron、本地打印助手及所需 .NET 运行时，使用软件无需安装 Node.js 或 .NET SDK。打印机需要先在 Windows 中安装相应驱动。
 
 | 下载项 | 说明 |
 | --- | --- |
-| [QueuePrint-0.1.5-win-x64.exe](https://github.com/Mechanic707/QueuePrint/releases/download/v0.1.5/QueuePrint-0.1.5-win-x64.exe) | Windows x64 免安装程序 |
-| [SHA256SUMS.txt](https://github.com/Mechanic707/QueuePrint/releases/download/v0.1.5/SHA256SUMS.txt) | 发行文件的 SHA-256 校验值 |
+| [QueuePrint-0.1.6-win-x64.exe](https://github.com/Mechanic707/QueuePrint/releases/download/v0.1.6/QueuePrint-0.1.6-win-x64.exe) | Windows x64 免安装程序 |
+| [SHA256SUMS.txt](https://github.com/Mechanic707/QueuePrint/releases/download/v0.1.6/SHA256SUMS.txt) | 发行文件的 SHA-256 校验值 |
 
-当前发行包未做代码签名，可通过 `Get-FileHash .\QueuePrint-0.1.5-win-x64.exe -Algorithm SHA256` 核对发布页中的校验值。
+当前发行包未做代码签名，可通过 `Get-FileHash .\QueuePrint-0.1.6-win-x64.exe -Algorithm SHA256` 核对发布页中的校验值。
 
 如使用目录版，运行 `win-unpacked/序印 QueuePrint.exe`，并保留整个 `win-unpacked` 目录。升级时先关闭旧版本，再运行新版本。
 
@@ -96,11 +97,18 @@ QueuePrint-0.1.5-win-x64.exe
 
 ## 预览、缩放与切换文件
 
+打开预览时默认以**适合整页**显示当前文件的**打印纸张效果**。窗口大小变化后会重新适应，完整显示纸张四边。
+
+- **预览 A4 等纸张**：右侧选择纸张大小、页面方向和页面缩放，预览实时更新；实际采用当前文件最终继承的属性。自动方向按当前页面判断。
+- **核对排版**：显示纸张尺寸、内容打印比例和打印机可打印区域虚线。“适合可打印区域”可放大或缩小，“仅缩小”保留小票原大小，“实际大小”保持原尺寸，超出区域时提示裁切。图片按文件 DPI 和 EXIF 方向计算实际尺寸。
+- **对照原文件**：在“预览方式”中切换到“原文件内容”，直接查看源 PDF 或图片。
 - **切换文件**：预览顶部的文件选择器按清单顺序分组显示文件，也可点击“上一文件／下一文件”。点击左侧其他文件夹，会预览其中的首个文件。
 - **切换页面**：使用上一页／下一页按钮，或直接输入 PDF 页码。图片按一页预览。
 - **自由缩放**：输入 `10%–400%` 之间的比例，使用放大／缩小按钮，或在内容上按住 **Ctrl＋滚轮**缩放。
 - **适应窗口**：一键切换适合宽度、适合整页和 100%。适应模式会随窗口大小更新。
 - **查看局部**：放大后按住鼠标左键拖拽内容，或使用滚动条移动查看。
+
+查看比例与右侧“页面缩放”分别控制屏幕显示大小和打印内容在纸上的大小。驱动可打印区域通过只读查询获得；查询失败时明确显示纸张排版示意，尚未计入硬件边距。
 
 预览操作只改变查看方式，不修改打印勾选、份数、打印页码或右侧的打印缩放设置。PDF 与图片切换、快速连续缩放会取消旧任务；同路径文件更新并重新导入后会刷新预览缓存。大页面使用受限的预览栅格分辨率，保持请求的显示尺寸，并在需要时显示清晰度提示。
 
@@ -209,6 +217,8 @@ A → A → A → A → A → A → B → B
 
 队列窗口以**文件数量**显示处理进度。比如 12 个文件合并为 1 个 Windows 作业时，主进度仍按 `0 / 12 个文件` 更新；当前文件会显示名称、内容页数和第几份。存在多份或多套时，额外显示已处理份次。
 
+队列窗口保留固定状态区域；文件切换、暂停和完成时保持窗口及清单位置，滚动位置与详情展开状态继续保留。
+
 同一文件的全部计划份次处理完，才计为 1 个“已处理文件”；所属 Windows 作业获得回执后，才计入“已确认提交”。Windows 作业编号与技术名称放在可展开的详情中。逐文件列表显示前 100 个文件，整体计数与当前文件覆盖全部清单。
 
 ![文件级处理与提交进度](docs/images/progress.png)
@@ -286,6 +296,7 @@ npm.cmd run dist
 | `npm.cmd run qa:portable` | 验证最终便携 EXE 重复启动后原生组件仍可用 |
 | `npm.cmd run qa:progress` | 使用模拟进度验证文件级队列界面，不提交打印作业 |
 | `npm.cmd run qa:preview` | 检查自由缩放、文件切换、拖拽及预览缓存，不提交打印作业 |
+| `npm.cmd run qa:paper-preview` | 检查纸张排版、驱动边距、实际大小裁切、图片 DPI 与窗口自适应 |
 | `npm.cmd run qa:fixtures` | 在 `.qa/fixtures` 创建自建样例文件 |
 | `npm.cmd run qa:desktop` | 检查实际 Electron 导入、预览与确认界面 |
 | `npm.cmd run qa:enhancements` | 检查资源管理器拖放、去重及单文件多份 |
@@ -293,13 +304,13 @@ npm.cmd run dist
 
 ## 测试与验证
 
-当前版本的 **67 项 Node 自动测试**覆盖目录自然排序、同级移动、逐项属性继承、页码范围、份数与套数乘法、双面补白、导入去重、提交互斥、暂停/停止、恢复约束、组件完整性、Windows 路径兼容性、文件级进度，以及预览缩放、指针锚点和栅格像素预算。
+当前版本的 **80 项 Node 自动测试**覆盖目录自然排序、同级移动、逐项属性继承、页码范围、份数与套数乘法、双面补白、导入去重、提交互斥、暂停/停止、恢复约束、组件完整性、Windows 路径兼容性、文件级进度，以及预览缩放、指针锚点、栅格像素预算、纸张排版、裁切与图片物理尺寸。
 
 ```powershell
 npm.cmd test
 ```
 
-桌面检查使用自建文件和隔离偏好目录，验证真实 Electron 程序中的文件夹导入、PDF/图片预览、份数计算、确认窗口、拖放及自由缩放。文件进度检查使用模拟提交回执；各检查均不向打印机提交真实作业。
+桌面检查使用自建文件和隔离偏好目录，验证真实 Electron 程序中的文件夹导入、PDF/图片预览、份数计算、确认窗口、拖放及自由缩放。文件进度检查使用模拟提交回执，检查每个文件结束时弹窗及清单位置稳定；纸张预览检查覆盖 A4/A3/A5、硬件边距、实际大小裁切、混合页方向、图片 DPI、最小窗口和驱动响应延迟。各检查均不向打印机提交真实作业。
 
 Playwright 已作为开发依赖锁定，`npm ci` 后即可运行桌面检查，无需额外下载浏览器。检查会启动实际 Electron 窗口；完整确认流程测试需要 Windows 中至少安装一个打印队列，例如系统的虚拟 PDF 打印机。
 
@@ -307,6 +318,9 @@ Playwright 已作为开发依赖锁定，`npm ci` 后即可运行桌面检查，
 npm.cmd run qa:fixtures
 npm.cmd run qa:desktop
 npm.cmd run qa:enhancements
+npm.cmd run qa:progress
+npm.cmd run qa:preview
+npm.cmd run qa:paper-preview
 npm.cmd run docs:screenshots
 ```
 
@@ -351,6 +365,16 @@ QueuePrint/
 界面将勾选、排序和属性交给核心模块生成明确计划；主进程核对已导入文件并有序提交；原生助手通过 Windows 打印 API 与 PDFium 完成逐页渲染。原生协议与命令说明见 [native/README.md](native/README.md)。
 
 ## 更新记录
+
+### v0.1.6
+
+- 修复打印队列每完成一个文件就跳动的问题，稳定状态卡片、弹窗高度和滚动位置，并按帧合并进度刷新。
+- 预览默认适合整页并随窗口自适应，保留自由缩放、原文件对照及文件切换。
+- 新增 A4 等纸张打印效果预览，实时联动纸张、方向与打印缩放，显示内容位置、驱动可打印区域和超出区域裁切提示。
+- 图片预览按嵌入 DPI/EXIF 方向还原打印尺寸；混合尺寸 PDF 按当前页判断自动方向。
+- 异步渲染完成后才更新画面；慢速驱动查询可被新预览取消等待，避免切换被阻塞；页码输入不会被自动刷新覆盖。
+
+
 
 ### v0.1.5
 

@@ -68,6 +68,8 @@ async function writePdf(file, colors, size) {
     }
     const selection = await printSelection();
     await page.locator('[data-action="view-preview"]').click();
+    // These checks target source geometry; paper layout has its own regression.
+    await page.locator('#qp-preview-mode').selectOption('source');
     const picker = page.locator('#qp-preview-file-select'); await picker.waitFor();
     const options = await picker.locator('option').evaluateAll(nodes => nodes.filter(node => node.value).map(node => ({ id: node.value, text: node.textContent })));
     assert.equal(options.length, 4);
@@ -201,9 +203,11 @@ async function writePdf(file, colors, size) {
     await page.mouse.down(); await page.mouse.move(resizedStage.x + resizedStage.width / 2, resizedStage.y + resizedStage.height / 2 - 45, { steps: 5 }); await page.mouse.up();
     assert.ok(await page.locator('#qp-paper-stage').evaluate(element => element.scrollTop > 0), 'Shrinking the window at a fixed zoom must enable drag panning when content starts overflowing.');
     await page.locator('#qp-paper-stage').evaluate(element => { element.style.height = ''; element.style.flex = ''; });
+    await page.locator('[data-action="view-list"]').click();
     await page.locator('#qp-sort').selectOption('reverse');
     assert.equal((await picker.locator('option').evaluateAll(nodes => nodes.filter(node => node.value).map(node => node.value)))[0], bad);
     await page.locator('#qp-sort').selectOption('natural');
+    await page.locator('[data-action="view-preview"]').click();
     await choose(a, 'teal'); await page.locator('#qp-preview-fit-page').click(); await settled(a);
     const screenshot = path.join(output, 'preview-navigation.png'); await page.screenshot({ path: screenshot }); report.screenshots.push(path.relative(root, screenshot).replaceAll('\\', '/'));
     await choose(b, 'purple'); await page.locator('[data-action="remove-selected"]').click(); await settled(a); await color('teal');
@@ -219,6 +223,13 @@ async function writePdf(file, colors, size) {
     console.log(JSON.stringify({ passed: true, actualPrinting: false, screenshots: report.screenshots }));
   } catch (error) {
     report.failure = { name: error.name, message: error.message }; console.error(error); process.exitCode = 1;
+    const page = await electron.firstWindow();
+    report.failure.geometry = await page.evaluate(() => {
+      const stage = document.querySelector('#qp-paper-stage'), canvas = document.querySelector('#qp-pdf-canvas');
+      return { view: { ...document.querySelector('#qp-preview-view').dataset }, stage: { width: stage.clientWidth, height: stage.clientHeight, style: stage.style.cssText }, canvas: { width: canvas.getBoundingClientRect().width, height: canvas.getBoundingClientRect().height } };
+    }).catch(() => null);
+    console.error(JSON.stringify(report.failure.geometry));
+    await page.screenshot({ path: path.join(output, 'failure.png') }).catch(() => {});
   } finally {
     await fs.writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2));
     const ownedProcess = electron.process();

@@ -36,6 +36,21 @@ internal static class PrinterApi
         return new { printers = result, paperDimensionUnit = "hundredths-inch" };
     }
 
+    // Read the effective sheet and hardware printable area without opening a
+    // properties dialog, changing system defaults, or creating a print job.
+    internal static object PageLayout(string printerName, PrintOptions options)
+    {
+        var page = Settings(printerName, options).DefaultPageSettings;
+        var bounds = page.Bounds;
+        var area = page.PrintableArea;
+        return new
+        {
+            paper = new { width = bounds.Width, height = bounds.Height },
+            printableArea = new { x = area.X, y = area.Y, width = area.Width, height = area.Height },
+            landscape = page.Landscape, dimensionUnit = "hundredths-inch",
+        };
+    }
+
     internal static PrinterSettings Settings(string printerName, PrintOptions options)
     {
         RequirePrinter(printerName);

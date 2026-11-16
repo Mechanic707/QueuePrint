@@ -1,7 +1,7 @@
 {
   "name": "queueprint",
   "productName": "序印 QueuePrint",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "保留文件夹顺序的本地批量打印工具",
   "author": "QueuePrint",
   "license": "MIT",
@@ -26,6 +26,7 @@
     "qa:portable": "node scripts/qa-portable.cjs",
     "qa:progress": "node scripts/qa-progress.cjs",
     "qa:preview": "node scripts/qa-preview.cjs",
+    "qa:paper-preview": "node scripts/qa-paper-preview.cjs",
     "docs:screenshots": "node scripts/capture-docs.cjs"
   },
   "dependencies": {

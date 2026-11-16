@@ -28,6 +28,7 @@ internal static class Program
             {
                 "ping" => new { version = "0.1.0", architecture = "win-x64", protocol = 1 },
                 "printers" => PrinterApi.ListPrinters(),
+                "page-layout" => PrinterApi.PageLayout(request.PrinterName, request.Settings ?? new()),
                 "properties" => PrinterApi.ShowProperties(request.PrinterName, request.DevModeBase64 ?? request.Settings?.DevModeBase64, request.OwnerWindow),
                 "decode-settings" => PrinterApi.DecodeSettings(request.PrinterName, request.DevModeBase64 ?? request.Settings?.DevModeBase64),
                 "inspect" => PrintEngine.Inspect(request.Paths ?? []),
