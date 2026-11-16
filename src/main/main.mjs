@@ -165,3 +165,4 @@ if (singleInstance) {
 
 // Only available to the isolated QA process; never exposed through the renderer bridge.
 export const qa = process.env.QUEUEPRINT_QA === '1' ? { registry, queue, native, getPrinters } : undefined;
+if (qa) globalThis.__queueprintQA = qa;

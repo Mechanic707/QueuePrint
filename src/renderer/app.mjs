@@ -1,4 +1,5 @@
 import { buildTree, orderedFiles, moveItem, resolveSettings, buildPrintPlan } from '../core/index.mjs';
+import { createPreviewController } from './preview.mjs';
 
 const root = document.getElementById('queueprint-design');
 const $ = selector => root.querySelector(selector);
@@ -14,9 +15,10 @@ let tree = buildTree([]);
 let printers = [];
 let state = { selected: null, focusedFolder: null, focusType: 'all', scope: 'batch', view: 'list', sort: 'natural', checked: new Set(), collapsed: new Set(), quantity: 1, quantityMode: 'sets', boundary: true, printerName: '', globalSettings: { ...defaults }, folderOverrides: {}, fileOverrides: {}, driverSettings: {}, presets: [] };
 let dialog = null, busy = false, currentBatch = null, currentPlan = null, dragged = null, returnFocus = null;
-let toastTimer = null, saveTimer = null, previewToken = 0, pdfModule = null, pdfDocument = null, pdfFileId = null, pdfRenderTask = null, imageUrl = null, previewPage = 1;
+let toastTimer = null, saveTimer = null;
 let externalDragDepth = 0;
 let queueFileNodes = new Map(), queueJobNodes = new Map();
+const preview = createPreviewController({ root, api, onSelectFile: focusFile });
 
 const files = () => orderedFiles(tree);
 const file = id => tree.files[id];
@@ -137,6 +139,7 @@ function renderTotals() {
   $('#qp-page-ranges').classList.toggle('is-invalid', errors.some(error => error.fileId === state.selected && /range|page/i.test(error.code || '')));
   $('#qp-list-view').hidden = state.view !== 'list';
   $('#qp-preview-view').hidden = state.view !== 'preview';
+  renderPreview();
   $$('[data-action^="view-"]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.action === 'view-' + state.view)));
   const batchLabel = { starting: '正在准备打印…', running: '正在有序提交', paused: '后续任务已暂停', stopping: '正在停止后续任务…', stopped: '已停止后续任务', submitted: '任务已提交至 Windows 队列', failed: '提交失败，请核对队列' };
   $('#qp-batch-status').textContent = currentBatch ? batchLabel[currentBatch.status] || currentBatch.status : '尚未提交打印任务';
@@ -156,17 +159,20 @@ function setFileCopies(id, value) {
   const wasSelected = state.selected === id;
   state.selected = id; state.focusedFolder = file(id).parentId; state.focusType = 'file'; state.scope = 'file';
   state.fileOverrides[id] = { ...state.fileOverrides[id], copies };
-  if (!wasSelected) previewPage = 1;
   update();
   if (state.view === 'preview' && !wasSelected) renderPreview();
 }
 function focusFile(id) {
   if (!file(id)) return;
-  state.selected = id; state.focusedFolder = file(id).parentId; state.focusType = 'file'; state.scope = 'file'; previewPage = 1;
+  state.selected = id; state.focusedFolder = file(id).parentId; state.focusType = 'file'; state.scope = 'file';
   render(); if (state.view === 'preview') renderPreview();
 }
 function focusFolder(id) {
   state.focusedFolder = id; state.focusType = 'folder'; state.scope = 'folder';
+  if (state.view === 'preview') {
+    const descendants = descendantFiles(id);
+    if (!descendants.some(item => item.id === state.selected)) state.selected = descendants[0]?.id || null;
+  }
   render();
   $$('[data-drag-folder]').find(el => el.dataset.dragFolder === id)?.scrollIntoView({ block: 'nearest' });
 }
@@ -248,72 +254,12 @@ function removeFocused() {
   const old = tree;
   tree = buildTree(preserved);
   Object.values(tree.folders).forEach(g => { const previous = old.folders[g.id]; if (previous) { g.folderIds.sort((a, b) => previous.folderIds.indexOf(a) - previous.folderIds.indexOf(b)); g.fileIds.sort((a, b) => previous.fileIds.indexOf(a) - previous.fileIds.indexOf(b)); } });
-  state.selected = files()[0]?.id || null; state.focusedFolder = file(state.selected)?.parentId || null; state.focusType = 'file'; state.scope = 'batch'; previewPage = 1;
+  state.selected = files()[0]?.id || null; state.focusedFolder = file(state.selected)?.parentId || null; state.focusType = 'file'; state.scope = 'batch';
   update(); if (state.view === 'preview') renderPreview(); announce(`已从清单移出 ${removeIds.length} 个文件，原文件保留`);
 }
 
-function byteArray(value) { return value instanceof Uint8Array ? value : value instanceof ArrayBuffer ? new Uint8Array(value) : new Uint8Array(value?.data || value || []); }
-async function loadPdfModule() {
-  if (!pdfModule) {
-    pdfModule = await import('../../node_modules/pdfjs-dist/build/pdf.mjs');
-    pdfModule.GlobalWorkerOptions.workerSrc = new URL('../../node_modules/pdfjs-dist/build/pdf.worker.mjs', import.meta.url).href;
-  }
-  return pdfModule;
-}
-function previewMessage(message) { $('#qp-preview-message').textContent = message; $('#qp-preview-message').hidden = false; $('#qp-pdf-canvas').hidden = true; $('#qp-image-preview').hidden = true; }
-async function renderPreview() {
-  const f = file(state.selected), token = ++previewToken;
-  pdfRenderTask?.cancel(); pdfRenderTask = null;
-  if (state.view !== 'preview') return;
-  if (!f) { previewMessage('从清单中选择文件'); return; }
-  $('#qp-preview-title').textContent = f.name;
-  $('#qp-preview-page-count').textContent = f.pages || '—';
-  $('#qp-preview-page-number').value = previewPage;
-  $('#qp-preview-page-number').max = f.pages || 1;
-  $$('[data-action="previous-page"]').forEach(b => { b.disabled = previewPage <= 1 || f.kind === 'image'; });
-  $$('[data-action="next-page"]').forEach(b => { b.disabled = previewPage >= (f.pages || 1) || f.kind === 'image'; });
-  previewMessage('正在读取预览…');
-  try {
-    const data = f.kind === 'image' || pdfFileId !== f.id || !pdfDocument ? await api.getFileBytes(f.id) : null;
-    if (token !== previewToken) return;
-    if (f.kind === 'image' && data.kind !== 'pdf') {
-      if (imageUrl) URL.revokeObjectURL(imageUrl);
-      imageUrl = URL.createObjectURL(new Blob([byteArray(data.bytes)], { type: data.mimeType || (/\.png$/i.test(f.name) ? 'image/png' : 'image/jpeg') }));
-      const image = $('#qp-image-preview'); image.src = imageUrl; image.alt = f.name;
-      await image.decode();
-      if (token !== previewToken) return;
-      const zoom = $('#qp-zoom').value;
-      image.style.width = zoom === 'fit' ? '100%' : `${image.naturalWidth * Number(zoom)}px`;
-      image.style.maxWidth = zoom === 'fit' ? '100%' : 'none';
-      $('#qp-preview-message').hidden = true; image.hidden = false; return;
-    }
-    if (pdfFileId !== f.id || !pdfDocument) {
-      if (pdfDocument) await pdfDocument.destroy();
-      const pdfjs = await loadPdfModule();
-      const loadingTask = pdfjs.getDocument({ data: byteArray(data.bytes), cMapUrl: new URL('../../node_modules/pdfjs-dist/cmaps/', import.meta.url).href, cMapPacked: true, standardFontDataUrl: new URL('../../node_modules/pdfjs-dist/standard_fonts/', import.meta.url).href, wasmUrl: new URL('../../node_modules/pdfjs-dist/wasm/', import.meta.url).href, isEvalSupported: false });
-      loadingTask.onPassword = (_updatePassword, reason) => { loadingTask.destroy(); if (token === previewToken) previewMessage(reason === 2 ? 'PDF 密码不正确，请使用已解密的文件。' : '此 PDF 需要密码，请先解密后重新导入。'); };
-      const loaded = await loadingTask.promise;
-      if (token !== previewToken) { await loaded.destroy(); return; }
-      pdfDocument = loaded; pdfFileId = f.id;
-    }
-    previewPage = Math.max(1, Math.min(previewPage, pdfDocument.numPages));
-    const page = await pdfDocument.getPage(previewPage);
-    if (token !== previewToken) return;
-    const base = page.getViewport({ scale: 1 }), zoom = $('#qp-zoom').value;
-    const availableWidth = Math.max(180, $('#qp-paper-stage').clientWidth - 44);
-    const scale = zoom === 'fit' ? availableWidth / base.width : Number(zoom);
-    const viewport = page.getViewport({ scale }), ratio = window.devicePixelRatio || 1, canvas = $('#qp-pdf-canvas');
-    canvas.width = Math.floor(viewport.width * ratio); canvas.height = Math.floor(viewport.height * ratio);
-    canvas.style.width = Math.floor(viewport.width) + 'px'; canvas.style.height = Math.floor(viewport.height) + 'px';
-    const context = canvas.getContext('2d', { alpha: false });
-    pdfRenderTask = page.render({ canvasContext: context, viewport, transform: ratio === 1 ? null : [ratio, 0, 0, ratio, 0, 0] });
-    await pdfRenderTask.promise;
-    if (token !== previewToken) return;
-    $('#qp-preview-message').hidden = true; canvas.hidden = false;
-    $('#qp-preview-page-count').textContent = pdfDocument.numPages; $('#qp-preview-page-number').value = previewPage;
-  } catch (error) { if (error?.name !== 'RenderingCancelledException' && token === previewToken) previewMessage('无法预览：' + error.message); }
-}
-function setPreviewPage(value) { const f = file(state.selected); previewPage = Math.max(1, Math.min(Number(f?.pages) || 1, Math.round(Number(value) || 1))); renderPreview(); }
+function renderPreview() { preview.sync({ files: files(), selectedId: state.selected, visible: state.view === 'preview' }); }
+function setPreviewPage(value) { preview.setPage(value); }
 
 function openDialog(type, title, content, actions) {
   returnFocus = document.activeElement; dialog = type;
@@ -500,7 +446,7 @@ root.addEventListener('click', async event => {
     else if (['pause-print', 'resume-print', 'stop-print'].includes(action)) await queueAction(action);
     else if (action === 'refresh-printers') await refreshPrinters();
     else if (action === 'driver-settings') await showDriver();
-    else if (action === 'previous-page' || action === 'next-page') setPreviewPage(previewPage + (action === 'previous-page' ? -1 : 1));
+    else if (action === 'previous-page' || action === 'next-page') setPreviewPage(Number($('#qp-preview-page-number').value) + (action === 'previous-page' ? -1 : 1));
     else if (action === 'save-preset') savePresetDialog();
     else if (action === 'commit-preset') { const name = $('#qp-preset-name').value.trim(); if (!name) { $('#qp-preset-name').focus(); return; } const id = 'preset-' + Date.now(); state.presets.push({ id, name, settings: { ...state.globalSettings }, boundary: state.boundary }); renderPresetOptions(); $('#qp-preset').value = id; closeDialog(); savePreferences(); announce('打印方案已保存'); }
   } catch (error) { showError(error); }
@@ -520,7 +466,6 @@ root.addEventListener('change', event => {
   else if (el.id === 'qp-page-ranges') setSetting('pageRanges', el.value.trim());
   else if (el.id === 'qp-printer') { state.printerName = el.value; enforceCapabilities(); update(); }
   else if (el.id === 'qp-preset') applyPreset(el.value);
-  else if (el.id === 'qp-zoom') renderPreview();
   else if (el.id === 'qp-preview-page-number') setPreviewPage(el.value);
 });
 root.addEventListener('dragstart', event => {
@@ -569,9 +514,7 @@ root.addEventListener('keydown', event => {
   if (event.key === 'Escape') { event.preventDefault(); closeDialog(); }
   if (event.key === 'Tab') { const elements = [...$('#qp-overlay').querySelectorAll('button:not([disabled]),input,select')].filter(el => !el.hidden), first = elements[0], last = elements.at(-1); if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); } }
 });
-let resizeTimer;
-window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (state.view === 'preview' && $('#qp-zoom').value === 'fit') renderPreview(); }, 160); });
-window.addEventListener('beforeunload', () => { clearTimeout(saveTimer); if (imageUrl) URL.revokeObjectURL(imageUrl); pdfDocument?.destroy(); });
+window.addEventListener('beforeunload', () => { clearTimeout(saveTimer); preview.dispose(); });
 
 async function initialize() {
   render();

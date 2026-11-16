@@ -107,10 +107,11 @@ const demoPrinters = [
 
     await page.locator('[data-action="view-preview"]').click();
     await page.locator('#qp-pdf-canvas').waitFor({ state: 'visible', timeout: 30_000 });
-    await page.locator('#qp-zoom').selectOption('0.5');
+    await page.locator('#qp-zoom-percent').fill('50');
+    await page.locator('#qp-zoom-percent').press('Enter');
     await page.waitForFunction(() => {
       const canvas = document.querySelector('#qp-pdf-canvas');
-      return !canvas.hidden && canvas.getBoundingClientRect().width > 250 && canvas.getBoundingClientRect().width < 350;
+      return document.querySelector('#qp-preview-view').dataset.loading === 'false' && !canvas.hidden && canvas.getBoundingClientRect().width > 250 && canvas.getBoundingClientRect().width < 350;
     });
     const canvas = await page.locator('#qp-pdf-canvas').evaluate(element => ({
       width: element.width, height: element.height,

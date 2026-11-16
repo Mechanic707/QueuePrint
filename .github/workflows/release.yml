@@ -62,6 +62,13 @@ jobs:
           $env:QUEUEPRINT_QA_EXE = Join-Path (Get-Location) 'release\win-unpacked\序印 QueuePrint.exe'
           npm.cmd run qa:progress
           if ($LASTEXITCODE -ne 0) { throw 'File progress UI checks failed.' }
+      - name: Verify preview zoom and file navigation
+        if: inputs.verify_existing != true
+        shell: pwsh
+        run: |
+          $env:QUEUEPRINT_QA_EXE = Join-Path (Get-Location) 'release\win-unpacked\序印 QueuePrint.exe'
+          npm.cmd run qa:preview
+          if ($LASTEXITCODE -ne 0) { throw 'Preview UI checks failed.' }
       - name: Verify repeated portable launches
         run: npm.cmd run qa:portable
       - name: Verify lowercase Windows temporary paths
