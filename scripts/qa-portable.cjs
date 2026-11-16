@@ -123,8 +123,20 @@ async function awaitCdp(port, launcher) {
         const rendered = await readOnlyNative(executable, { command: 'render', paths: [fixture], outputPath: png, pageNumber: 1, renderDpi: 96 });
         result.render = rendered.ok && await exists(png) && (await fs.stat(png)).size > 0;
       }
-      try { const list = await page.evaluate(() => window.queueprint.getPrinters()); result.ipcPrinters = Array.isArray(list); result.ipcPrinterCount = list.length; }
-      catch { result.ipcPrinters = false; }
+      result.ipcBridgeAvailable = await page.evaluate(() => typeof window.queueprint?.getPrinters === 'function');
+      try {
+        const list = await page.evaluate(() => window.queueprint.getPrinters());
+        result.ipcPrinters = Array.isArray(list); result.ipcPrinterCount = list?.length;
+        if (!result.ipcPrinters) result.ipcFailure = 'UNEXPECTED_REPLY';
+      } catch (error) {
+        result.ipcPrinters = false;
+        result.ipcFailure = !result.ipcBridgeAvailable ? 'BRIDGE_UNAVAILABLE'
+          : error.message.includes('无效的应用请求') ? 'FRAME_GUARD_REJECTED'
+          : error.message.includes('本地打印组件') ? 'NATIVE_COMPONENT_ERROR'
+          : error.message.includes('JSON') ? 'NATIVE_PROTOCOL_ERROR'
+          : error.message.includes('timeout') || error.message.includes('超时') ? 'IPC_TIMEOUT'
+          : 'IPC_EXECUTION_ERROR';
+      }
       report.stages.push(result); await persist();
       // Print only aggregate results. Do not print device names or private paths.
       console.log(JSON.stringify(result));
