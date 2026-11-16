@@ -47,6 +47,7 @@ jobs:
         if: inputs.verify_existing == true
         shell: powershell
         run: |
+          $ProgressPreference = 'SilentlyContinue'
           $version = (Get-Content -LiteralPath package.json -Raw | ConvertFrom-Json).version
           New-Item -ItemType Directory -Path release -Force | Out-Null
           $name = "QueuePrint-$version-win-x64.exe"
@@ -56,6 +57,15 @@ jobs:
         run: node scripts/check-package.mjs
       - name: Verify repeated portable launches
         run: npm.cmd run qa:portable
+      - name: Verify lowercase Windows temporary paths
+        shell: powershell
+        run: |
+          $qaTemporaryDirectory = [System.IO.Path]::GetFullPath((Join-Path $env:RUNNER_TEMP 'queueprint-case-check')).ToLowerInvariant()
+          New-Item -ItemType Directory -Path $qaTemporaryDirectory -Force | Out-Null
+          $env:TEMP = $qaTemporaryDirectory
+          $env:TMP = $qaTemporaryDirectory
+          npm.cmd run qa:portable
+          if ($LASTEXITCODE -ne 0) { throw 'Portable IPC failed with lowercase temporary paths.' }
       - name: Write checksums
         if: inputs.verify_existing != true
         shell: powershell

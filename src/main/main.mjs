@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { runNative, findNativeHost } from './native-host.mjs';
 import { FileRegistry } from './files.mjs';
 import { PrintQueue } from './print-queue.mjs';
+import { isSameRendererUrl } from './renderer-url.mjs';
 
 const mainDir = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(mainDir, '../..');
@@ -35,7 +36,7 @@ const queue = new PrintQueue({
 });
 
 function guard(event) {
-  if (!win || event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame || event.senderFrame.url !== rendererUrl) {
+  if (!win || event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame || !isSameRendererUrl(event.senderFrame.url, rendererUrl)) {
     throw new Error('无效的应用请求。');
   }
 }
@@ -133,7 +134,7 @@ async function createWindow() {
   });
   if (preferences.windowMaximized) win.maximize();
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  win.webContents.on('will-navigate', (event, url) => { if (url !== rendererUrl) event.preventDefault(); });
+  win.webContents.on('will-navigate', (event, url) => { if (!isSameRendererUrl(url, rendererUrl)) event.preventDefault(); });
   win.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
   win.once('ready-to-show', () => { if (process.env.QUEUEPRINT_QA !== '1') win.show(); });
   win.on('close', async (event) => {

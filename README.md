@@ -8,10 +8,10 @@
 
 面向 Windows 的本地批量打印工具。混合导入 PDF 与图片，保留子文件夹分组，核对顺序后一次提交。
 
-[![Version](https://img.shields.io/badge/version-0.1.2-4564e8?style=flat-square)](https://github.com/Mechanic707/QueuePrint/releases)
+[![Version](https://img.shields.io/badge/version-0.1.3-4564e8?style=flat-square)](https://github.com/Mechanic707/QueuePrint/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078d4?style=flat-square)](#安装与启动)
 [![License](https://img.shields.io/badge/license-MIT-258a69?style=flat-square)](LICENSE)
-[![Tests](https://img.shields.io/badge/Node%20tests-46%20passed-258a69?style=flat-square)](#测试与验证)
+[![Tests](https://img.shields.io/badge/Node%20tests-51%20passed-258a69?style=flat-square)](#测试与验证)
 [![Windows checks](https://github.com/Mechanic707/QueuePrint/actions/workflows/ci.yml/badge.svg)](https://github.com/Mechanic707/QueuePrint/actions/workflows/ci.yml)
 
 [**下载 Windows 版**](https://github.com/Mechanic707/QueuePrint/releases/latest) · [快速开始](#快速开始) · [功能一览](#功能一览) · [开发与构建](#开发与构建) · [提交问题](https://github.com/Mechanic707/QueuePrint/issues)
@@ -68,17 +68,17 @@
 在 [Releases](https://github.com/Mechanic707/QueuePrint/releases/latest) 下载 Windows x64 免安装包：
 
 ```text
-QueuePrint-0.1.2-win-x64.exe
+QueuePrint-0.1.3-win-x64.exe
 ```
 
 打开即可使用。发布包已包含 Electron、本地打印助手及所需 .NET 运行时，使用软件无需安装 Node.js 或 .NET SDK。打印机需要先在 Windows 中安装相应驱动。
 
 | 下载项 | 说明 |
 | --- | --- |
-| [QueuePrint-0.1.2-win-x64.exe](https://github.com/Mechanic707/QueuePrint/releases/download/v0.1.2/QueuePrint-0.1.2-win-x64.exe) | Windows x64 免安装程序 |
-| [SHA256SUMS.txt](https://github.com/Mechanic707/QueuePrint/releases/download/v0.1.2/SHA256SUMS.txt) | 发行文件的 SHA-256 校验值 |
+| [QueuePrint-0.1.3-win-x64.exe](https://github.com/Mechanic707/QueuePrint/releases/download/v0.1.3/QueuePrint-0.1.3-win-x64.exe) | Windows x64 免安装程序 |
+| [SHA256SUMS.txt](https://github.com/Mechanic707/QueuePrint/releases/download/v0.1.3/SHA256SUMS.txt) | 发行文件的 SHA-256 校验值 |
 
-当前发行包未做代码签名，可通过 `Get-FileHash .\QueuePrint-0.1.2-win-x64.exe -Algorithm SHA256` 核对发布页中的校验值。
+当前发行包未做代码签名，可通过 `Get-FileHash .\QueuePrint-0.1.3-win-x64.exe -Algorithm SHA256` 核对发布页中的校验值。
 
 如使用目录版，运行 `win-unpacked/序印 QueuePrint.exe`，并保留整个 `win-unpacked` 目录。升级时先关闭旧版本，再运行新版本。
 
@@ -271,7 +271,7 @@ npm.cmd run dist
 
 ## 测试与验证
 
-当前版本的 **46 项 Node 自动测试**覆盖目录自然排序、同级移动、逐项属性继承、页码范围、份数与套数乘法、双面补白、导入去重、提交互斥、暂停/停止、提交状态不明时的恢复约束，以及原生组件缺失和发行包完整性检查。
+当前版本的 **51 项 Node 自动测试**覆盖目录自然排序、同级移动、逐项属性继承、页码范围、份数与套数乘法、双面补白、导入去重、提交互斥、暂停/停止、提交状态不明时的恢复约束、原生组件缺失、发行包完整性，以及 Windows 本地界面路径大小写和编码兼容性。
 
 ```powershell
 npm.cmd test
@@ -304,7 +304,7 @@ python native/tests/image_smoke.py
 
 - 推送到 `main` 或提交 Pull Request 时，自动运行 Windows Node 测试和原生助手只读检查。
 - 推送与 `package.json` 版本一致的 `v*` 标签时，自动构建 Windows 免安装包、生成校验值并上传到 Release。
-- 手动触发发布工作流会生成可下载的 Actions 构建产物；已有同名 Release 资产会保留。
+- 手动触发发布工作流会生成可下载的 Actions 构建产物；已有同名 Release 资产会保留。勾选 `verify_existing` 可只下载当前已发布版本进行回归验证。
 - 发布前会对比打包后的源码与全部原生文件，并运行最终便携 EXE 的重复启动回归，避免只验证目录版。
 
 ## 项目结构
@@ -330,6 +330,13 @@ QueuePrint/
 
 ## 更新记录
 
+### v0.1.3
+
+- 修复 Windows 临时目录盘符或路径大小写变化时，界面请求被误判为无效的问题。
+- 在保留窗口和主页面校验的基础上，按 Windows 文件路径语义比较界面地址。
+- 发布流程增加小写临时目录下的最终 EXE 回归检查。
+- 移除窗口标题中硬编码的旧版本号。
+
 ### v0.1.2
 
 - 修复重复打开免安装程序后，临时目录被另一启动进程清理、导致打印组件丢失的问题。
@@ -348,7 +355,7 @@ QueuePrint/
 
 ### v0.1.1 显示“本地打印组件尚未构建”怎么办？
 
-请关闭所有序印窗口，下载并运行 **v0.1.2 或更新版本**。v0.1.1 便携版在重复启动时可能清理正在使用的打印组件，v0.1.2 已修复。使用发行版无需执行 `npm run native:build`；该命令仅供源码开发使用。
+请关闭所有序印窗口，下载并运行 **v0.1.3 或更新版本**。新版已修复重复启动时清理组件，以及 Windows 临时路径大小写导致请求失败的问题。使用发行版无需执行 `npm run native:build`；该命令仅供源码开发使用。
 
 ### 支持 Word、Excel、PPT 或其他图片格式吗？
 
