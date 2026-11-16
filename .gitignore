@@ -1,0 +1,21 @@
+node_modules/
+release/
+native/**/bin/
+native/**/obj/
+native/publish/
+.qa/
+*.log
+
+# Generated fixtures, local configuration, and build/debug files.
+native/tests/fixtures/
+native/*.tgz
+native/*.nupkg
+native/*.zip
+*.pdb
+*.user
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+docs/readme-draft.md

@@ -1,0 +1,84 @@
+{
+  "name": "queueprint",
+  "productName": "序印 QueuePrint",
+  "version": "0.1.1",
+  "description": "保留文件夹顺序的本地批量打印工具",
+  "author": "QueuePrint",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "^22.13.0 || >=24.0.0"
+  },
+  "main": "src/main/main.mjs",
+  "scripts": {
+    "prestart": "node scripts/ensure-electron.cjs",
+    "start": "electron .",
+    "test": "node --test test/*.test.mjs test-main/*.test.mjs",
+    "native:build": "powershell -NoProfile -ExecutionPolicy Bypass -File native/build.ps1",
+    "prepack": "node scripts/ensure-electron.cjs",
+    "pack": "electron-builder --win dir --x64",
+    "predist": "node scripts/ensure-electron.cjs",
+    "dist": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package.ps1",
+    "qa:fixtures": "node scripts/create-fixtures.mjs",
+    "qa:desktop": "node scripts/qa-desktop.cjs",
+    "qa:enhancements": "node scripts/qa-enhancements.cjs",
+    "docs:screenshots": "node scripts/capture-docs.cjs"
+  },
+  "dependencies": {
+    "lucide": "1.73.0",
+    "pdfjs-dist": "6.5.438"
+  },
+  "devDependencies": {
+    "electron": "45.3.2",
+    "electron-builder": "26.18.0",
+    "pdf-lib": "1.17.1",
+    "playwright": "1.65.1"
+  },
+  "build": {
+    "appId": "local.queueprint.desktop",
+    "productName": "序印 QueuePrint",
+    "artifactName": "QueuePrint-${version}-win-x64.${ext}",
+    "directories": {
+      "output": "release",
+      "buildResources": "assets"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json",
+      "LICENSE",
+      "README.md",
+      "THIRD-PARTY-NOTICES.md",
+      "!**/*.test.mjs"
+    ],
+    "extraFiles": [
+      {
+        "from": "README.md",
+        "to": "使用说明.md"
+      }
+    ],
+    "extraResources": [
+      {
+        "from": "native/publish",
+        "to": "native",
+        "filter": [
+          "**/*",
+          "!**/*.pdb"
+        ]
+      }
+    ],
+    "asar": true,
+    "electronDist": "node_modules/electron/dist",
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "icon": "assets/icon.ico",
+      "signExecutable": false
+    },
+    "portable": {
+      "requestExecutionLevel": "user"
+    }
+  }
+}

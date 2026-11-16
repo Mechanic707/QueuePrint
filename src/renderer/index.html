@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' blob: data:; worker-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>序印 QueuePrint 0.1.1</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="../../node_modules/lucide/dist/umd/lucide.js" defer></script>
+  <script type="module" src="./app.mjs"></script>
+</head>
+<body>
+<div id="queueprint-design" aria-label="序印批量打印工作台">
+  <header class="qp-titlebar">
+    <div class="qp-brand"><span class="qp-brandmark"><i data-lucide="printer" aria-hidden="true"></i></span><strong>序印</strong><span class="qp-wordmark">QUEUEPRINT</span></div>
+    <div class="qp-workspace-name">批量打印工作台</div><span class="qp-local-label"><i data-lucide="hard-drive" aria-hidden="true"></i>文件在本机处理</span>
+  </header>
+  <div class="qp-toolbar">
+    <div class="qp-actions"><button class="qp-button qp-import" data-action="import-folder"><i data-lucide="folder-plus" aria-hidden="true"></i>导入文件夹</button><button class="qp-button" data-action="import-files"><i data-lucide="file-plus-2" aria-hidden="true"></i>添加文件</button><button class="qp-button" data-action="remove-selected" id="qp-remove-button" disabled><i data-lucide="list-minus" aria-hidden="true"></i>移出清单</button></div>
+    <div class="qp-toolbar-note"><i data-lucide="folder-tree" aria-hidden="true"></i>保留目录层级<span class="qp-dot-separator">·</span>PDF / JPG / PNG</div>
+  </div>
+  <div id="qp-runtime-status" class="qp-runtime-status" role="status" hidden></div>
+  <div class="qp-workspace">
+    <aside class="qp-tree" aria-label="文件夹目录">
+      <div class="qp-section-label">文件目录<span id="qp-root-count">0 组</span></div>
+      <button class="qp-tree-all" data-action="focus-all"><i data-lucide="layers" aria-hidden="true"></i><span>全部文件</span><span id="qp-file-count" class="qp-count">0</span></button>
+      <div class="qp-tree-root"><i data-lucide="folder-open" aria-hidden="true"></i><span>本次打印材料</span></div>
+      <div id="qp-tree-items"></div>
+      <div class="qp-tree-bottom"><i data-lucide="arrow-down-wide-narrow" aria-hidden="true"></i><span>按目录逐组打印<br><small>同层按数字自然排序</small></span></div>
+    </aside>
+    <main class="qp-queue" aria-label="打印文件清单">
+      <div class="qp-queue-heading"><div><h2>打印清单</h2><p id="qp-list-caption">导入文件夹或添加文件开始</p></div><div class="qp-view-switch" aria-label="清单视图"><button data-action="view-list" aria-pressed="true">清单</button><button data-action="view-preview" aria-pressed="false">预览</button></div></div>
+      <div class="qp-list-tools"><div class="qp-order-lock"><i data-lucide="list-ordered" aria-hidden="true"></i><span id="qp-order-label">目录分组 · 自然排序</span></div><div class="qp-small-actions"><button class="qp-icon-button" data-action="move-up" aria-label="上移选中项" title="上移选中项"><i data-lucide="arrow-up" aria-hidden="true"></i></button><button class="qp-icon-button" data-action="move-down" aria-label="下移选中项" title="下移选中项"><i data-lucide="arrow-down" aria-hidden="true"></i></button><select id="qp-sort" aria-label="组内排序方式"><option value="natural">自然排序</option><option value="reverse">名称倒序</option><option value="manual">手动排序</option></select></div></div>
+      <div id="qp-list-view" class="qp-list-scroll"><table class="qp-file-table"><thead><tr><th class="qp-check-cell"><input id="qp-check-all" type="checkbox" aria-label="选择全部可打印文件"></th><th class="qp-number-cell">顺序</th><th>文件名称</th><th class="qp-copies-cell" id="qp-copies-heading" title="每套内此文件打印几份">份/套</th><th class="qp-pages-cell">页数</th><th class="qp-state-cell">设置</th></tr></thead><tbody id="qp-file-rows"></tbody></table><div id="qp-empty-state" class="qp-empty-state"><span class="qp-empty-symbol"><i data-lucide="files" aria-hidden="true"></i></span><h3>把一整批材料，按顺序打好</h3><p>直接拖入文件夹、PDF 或图片，或点击下方选择。<br>文件夹分组会保留，打印前可以核对清单。</p><button class="qp-button qp-import" data-action="import-folder"><i data-lucide="folder-plus" aria-hidden="true"></i>选择文件夹</button></div></div>
+      <div id="qp-preview-view" hidden><div class="qp-preview-bar"><span id="qp-preview-title">选择一个文件查看内容</span><div class="qp-preview-zoom"><label for="qp-zoom">缩放</label><select id="qp-zoom"><option value="fit">适合宽度</option><option value="0.5">50%</option><option value="1">100%</option><option value="1.5">150%</option><option value="2">200%</option></select></div></div><div class="qp-paper-stage" id="qp-paper-stage"><div id="qp-preview-message" class="qp-preview-message">从清单中选择文件</div><canvas id="qp-pdf-canvas" hidden aria-label="PDF页面预览"></canvas><img id="qp-image-preview" hidden alt=""></div><div class="qp-preview-footer"><button class="qp-icon-button" data-action="previous-page" aria-label="上一页"><i data-lucide="chevron-left" aria-hidden="true"></i></button><label class="qp-page-input-label">第 <input id="qp-preview-page-number" type="number" min="1" value="1" aria-label="预览页码"> / <span id="qp-preview-page-count">—</span> 页</label><button class="qp-icon-button" data-action="next-page" aria-label="下一页"><i data-lucide="chevron-right" aria-hidden="true"></i></button></div></div>
+      <div class="qp-queue-tail"><i data-lucide="grip-vertical" aria-hidden="true"></i><span>可拖入文件夹或文件；清单内拖动只调整同组顺序，份数可直接修改</span></div>
+    </main>
+    <aside class="qp-settings" aria-label="打印属性设置">
+      <div class="qp-settings-title"><h2>打印设置</h2><button class="qp-text-button" data-action="save-preset"><i data-lucide="bookmark-plus" aria-hidden="true"></i>存为方案</button></div>
+      <label class="qp-field qp-printer-field"><span>打印机 <button class="qp-text-button" data-action="refresh-printers" type="button" aria-label="刷新打印机"><i data-lucide="refresh-cw" aria-hidden="true"></i>刷新</button></span><select id="qp-printer"><option value="">正在读取打印机…</option></select></label>
+      <div class="qp-printer-meta"><span id="qp-printer-info">—</span><button class="qp-text-button" data-action="driver-settings">打印机属性<i data-lucide="external-link" aria-hidden="true"></i></button></div>
+      <div class="qp-divider"></div>
+      <label class="qp-field"><span>打印方案</span><select id="qp-preset"><option value="standard">常规文档</option><option value="receipt">报销票据 · 单面</option><option value="duplex">归档材料 · 双面</option></select></label>
+      <div class="qp-scope" role="group" aria-label="设置应用范围"><button data-scope="batch" aria-pressed="true">整批</button><button data-scope="folder" aria-pressed="false">文件夹</button><button data-scope="file" aria-pressed="false">此文件</button></div>
+      <div class="qp-scope-context"><strong id="qp-scope-title">整批默认设置</strong><span id="qp-scope-caption">应用于所有未单独设置的文件</span><button class="qp-text-button" id="qp-inherit" data-action="restore" hidden>恢复继承</button></div>
+      <div class="qp-field-grid"><label class="qp-field"><span>纸张大小</span><select data-setting="paper"><option value="A4">A4</option><option value="A5">A5</option><option value="A3">A3</option><option value="Letter">Letter</option><option value="Legal">Legal</option></select></label><label class="qp-field"><span>页面方向</span><select data-setting="orientation"><option value="auto">自动识别</option><option value="portrait">纵向</option><option value="landscape">横向</option></select></label><label class="qp-field"><span>色彩模式</span><select data-setting="color"><option value="mono">黑白</option><option value="color">彩色</option></select></label><label class="qp-field"><span>单双面</span><select data-setting="duplex"><option value="simplex">单面打印</option><option value="long">双面 · 长边</option><option value="short">双面 · 短边</option></select></label></div>
+      <label class="qp-field qp-scale-field"><span>页面缩放</span><select data-setting="scale"><option value="fit">适合可打印区域</option><option value="actual">实际大小 · 100%</option><option value="shrink">仅缩小过大页面</option></select></label>
+      <div id="qp-file-settings" hidden><label class="qp-field"><span>打印页码</span><input id="qp-page-ranges" type="text" placeholder="全部，例如 1-3, 5" autocomplete="off"></label><label class="qp-field"><span id="qp-file-copies-label">每套内，此文件打印几份</span><input id="qp-file-copies" type="number" min="1" max="100" value="1"></label><p id="qp-file-copies-hint" class="qp-copies-hint"></p></div>
+      <label class="qp-toggle-row"><input id="qp-boundary" type="checkbox" checked><span>每个文件从新纸开始<small id="qp-boundary-note">双面时，自动留出空白背面</small></span></label>
+      <div class="qp-divider"></div>
+      <div class="qp-quantity-head"><span>打印数量</span><div class="qp-stepper"><button data-action="quantity-down" aria-label="减少打印数量">−</button><input id="qp-quantity" type="number" value="1" min="1" max="100" aria-label="打印套数或份数"><span id="qp-quantity-unit">套</span><button data-action="quantity-up" aria-label="增加打印数量">+</button></div></div>
+      <div class="qp-quantity-modes"><label><input type="radio" name="qp-quantity-mode" value="sets" checked>整批成套</label><label><input type="radio" name="qp-quantity-mode" value="copies">逐文件多份</label></div>
+      <div id="qp-sequence-hint" class="qp-sequence-hint">A → B → C，整批打印 1 套</div>
+    </aside>
+  </div>
+  <footer class="qp-footer"><div class="qp-totals"><div><strong id="qp-total-files">0</strong> 个文件<span class="qp-dot-separator">·</span><strong id="qp-total-pages">0</strong> 页<span class="qp-sheet-total">预计 <strong id="qp-total-sheets">0</strong> 张</span></div><span id="qp-footer-detail">请先导入文件</span></div><div class="qp-footer-actions"><button class="qp-button" data-action="show-order"><i data-lucide="list-checks" aria-hidden="true"></i>出纸顺序</button><button class="qp-button qp-primary" id="qp-print-button" data-action="confirm-print" disabled><i data-lucide="printer" aria-hidden="true"></i><span>开始打印</span><span class="qp-print-count" id="qp-print-count">0</span></button></div></footer>
+  <div class="qp-modebar"><button class="qp-text-button" data-action="show-queue"><i data-lucide="list-video" aria-hidden="true"></i><span id="qp-batch-status">尚未提交打印任务</span></button><span id="qp-status-detail">本地文件 · 目录分组已保留</span></div>
+  <div id="qp-announcement" class="qp-toast" role="status" aria-live="polite" hidden></div>
+  <div id="qp-drop-overlay" class="qp-drop-overlay" hidden aria-hidden="true"><div><span class="qp-drop-symbol"><i data-lucide="folder-input" aria-hidden="true"></i></span><strong id="qp-drop-title">松开鼠标，导入文件夹或文件</strong><span id="qp-drop-caption">支持 PDF、JPG、PNG，自动保留子文件夹分组</span></div></div>
+  <div id="qp-overlay" class="qp-overlay" hidden><section class="qp-dialog" role="dialog" aria-modal="true" aria-labelledby="qp-dialog-title"><header><div><span class="qp-dialog-eyebrow" id="qp-dialog-eyebrow">QUEUEPRINT</span><h2 id="qp-dialog-title"></h2></div><button class="qp-icon-button" data-action="close-dialog" aria-label="关闭窗口"><i data-lucide="x" aria-hidden="true"></i></button></header><div id="qp-dialog-body"></div><footer id="qp-dialog-actions"></footer></section></div>
+</div>
+</body>
+</html>
