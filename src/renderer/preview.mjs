@@ -240,6 +240,7 @@ export function createPreviewController({ root, api, onSelectFile }) {
   const observer = new ResizeObserver(() => {
     const size = `${stage.clientWidth}:${stage.clientHeight}:${window.devicePixelRatio}`;
     if (size === lastSize) return; lastSize = size;
+    if (visible && !content.hidden) stage.classList.toggle('can-pan', stage.scrollWidth > stage.clientWidth + 1 || stage.scrollHeight > stage.clientHeight + 1);
     clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (visible && selected && zoomMode !== 'custom') void refresh({ anchor: anchorAt() }); }, 90);
   });
   observer.observe(stage);

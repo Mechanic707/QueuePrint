@@ -185,6 +185,15 @@ async function writePdf(file, colors, size) {
     assert.equal(await page.locator('#qp-preview-view').evaluate(element => Number(element.dataset.zoomPercent)), largePage.percent, 'Zooming out at the manual limit must not unexpectedly zoom in.');
     assert.equal(await page.evaluate(() => window.devicePixelRatio), largePage.ratio);
     await electron.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1200, 880));
+    await choose(a, 'teal'); await zoom(25);
+    await page.waitForFunction(() => !document.querySelector('#qp-paper-stage').classList.contains('can-pan'));
+    await electron.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1200, 760));
+    await page.waitForFunction(() => document.querySelector('#qp-paper-stage').classList.contains('can-pan'));
+    const resizedStage = await page.locator('#qp-paper-stage').boundingBox();
+    await page.mouse.move(resizedStage.x + resizedStage.width / 2, resizedStage.y + resizedStage.height / 2);
+    await page.mouse.down(); await page.mouse.move(resizedStage.x + resizedStage.width / 2, resizedStage.y + resizedStage.height / 2 - 45, { steps: 5 }); await page.mouse.up();
+    assert.ok(await page.locator('#qp-paper-stage').evaluate(element => element.scrollTop > 0), 'Shrinking the window at a fixed zoom must enable drag panning when content starts overflowing.');
+    await electron.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1200, 880));
     await page.locator('#qp-sort').selectOption('reverse');
     assert.equal((await picker.locator('option').evaluateAll(nodes => nodes.filter(node => node.value).map(node => node.value)))[0], bad);
     await page.locator('#qp-sort').selectOption('natural');
