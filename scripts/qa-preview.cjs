@@ -142,10 +142,17 @@ async function writePdf(file, colors, size) {
     const fit = await page.evaluate(() => { const stage = document.querySelector('#qp-paper-stage'), canvas = document.querySelector('#qp-pdf-canvas'), style = getComputedStyle(stage); return { width: canvas.getBoundingClientRect().width, height: canvas.getBoundingClientRect().height, availableWidth: stage.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight), availableHeight: stage.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom) }; });
     assert.ok(fit.width <= fit.availableWidth + 2 && fit.height <= fit.availableHeight + 2, 'Fit-page must show the whole page.');
     await page.locator('#qp-preview-fit-width').click(); await settled(a);
+    await page.waitForFunction(() => {
+      const stage = document.querySelector('#qp-paper-stage'), canvas = document.querySelector('#qp-pdf-canvas'), css = getComputedStyle(stage);
+      return document.querySelector('#qp-preview-view').dataset.loading === 'false' && Math.abs(canvas.getBoundingClientRect().width - (stage.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight))) < 2;
+    });
     const oldWidth = await page.locator('#qp-pdf-canvas').evaluate(element => element.getBoundingClientRect().width);
-    await electron.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1200, 880));
+    // Hosted Windows can clamp initial window bounds to its virtual monitor.
+    // Exercise the actual ResizeObserver dependency with a measured viewport.
+    await page.locator('#qp-paper-stage').evaluate(element => { element.style.width = Math.max(180, element.clientWidth - 100) + 'px'; element.style.alignSelf = 'flex-start'; });
     await page.waitForFunction(oldWidth => { const view = document.querySelector('#qp-preview-view'), canvas = document.querySelector('#qp-pdf-canvas'); return view.dataset.loading === 'false' && canvas.getBoundingClientRect().width < oldWidth - 20; }, oldWidth);
     assert.ok(await page.locator('#qp-paper-stage').evaluate(element => element.scrollWidth <= element.clientWidth + 2));
+    await page.locator('#qp-paper-stage').evaluate(element => { element.style.width = ''; element.style.alignSelf = ''; });
 
     await page.locator('#qp-tree-items [data-folder]').filter({ hasText: '02-图片' }).first().click(); await settled(photo);
     await page.locator('#qp-image-preview').waitFor({ state: 'visible' });
@@ -169,7 +176,7 @@ async function writePdf(file, colors, size) {
     await settled(a); await color('teal');
     assert.deepEqual(await printSelection(), selection, 'Reimport must retain existing checks/copies.');
     await choose(b, 'purple');
-    await electron.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1200, 760));
+    await page.locator('#qp-paper-stage').evaluate(element => { element.style.height = '220px'; element.style.flex = '0 0 220px'; });
     await page.locator('#qp-preview-fit-page').click();
     await page.waitForFunction(() => {
       const view = document.querySelector('#qp-preview-view'), stage = document.querySelector('#qp-paper-stage'), canvas = document.querySelector('#qp-pdf-canvas'), css = getComputedStyle(stage);
@@ -184,16 +191,16 @@ async function writePdf(file, colors, size) {
     await page.keyboard.down('Control'); await page.mouse.wheel(0, 120); await page.keyboard.up('Control'); await page.waitForTimeout(150);
     assert.equal(await page.locator('#qp-preview-view').evaluate(element => Number(element.dataset.zoomPercent)), largePage.percent, 'Zooming out at the manual limit must not unexpectedly zoom in.');
     assert.equal(await page.evaluate(() => window.devicePixelRatio), largePage.ratio);
-    await electron.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1200, 880));
+    await page.locator('#qp-paper-stage').evaluate(element => { element.style.height = '320px'; element.style.flex = '0 0 320px'; });
     await choose(a, 'teal'); await zoom(25);
     await page.waitForFunction(() => !document.querySelector('#qp-paper-stage').classList.contains('can-pan'));
-    await electron.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1200, 760));
+    await page.locator('#qp-paper-stage').evaluate(element => { element.style.height = '180px'; element.style.flex = '0 0 180px'; });
     await page.waitForFunction(() => document.querySelector('#qp-paper-stage').classList.contains('can-pan'));
     const resizedStage = await page.locator('#qp-paper-stage').boundingBox();
     await page.mouse.move(resizedStage.x + resizedStage.width / 2, resizedStage.y + resizedStage.height / 2);
     await page.mouse.down(); await page.mouse.move(resizedStage.x + resizedStage.width / 2, resizedStage.y + resizedStage.height / 2 - 45, { steps: 5 }); await page.mouse.up();
     assert.ok(await page.locator('#qp-paper-stage').evaluate(element => element.scrollTop > 0), 'Shrinking the window at a fixed zoom must enable drag panning when content starts overflowing.');
-    await electron.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1200, 880));
+    await page.locator('#qp-paper-stage').evaluate(element => { element.style.height = ''; element.style.flex = ''; });
     await page.locator('#qp-sort').selectOption('reverse');
     assert.equal((await picker.locator('option').evaluateAll(nodes => nodes.filter(node => node.value).map(node => node.value)))[0], bad);
     await page.locator('#qp-sort').selectOption('natural');
