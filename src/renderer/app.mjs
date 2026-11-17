@@ -70,13 +70,13 @@ function renderRows() {
       const custom = Object.keys(state.fileOverrides[fid] || {}).length > 0;
       const inherited = ancestors(f.parentId).some(g => Object.keys(state.folderOverrides[g.id] || {}).length > 0);
       const copies = Number(effective(f).copies) || 1;
-      return `<tr class="qp-file-row${state.selected === fid && state.focusType === 'file' ? ' is-selected' : ''}${invalid ? ' has-error' : ''}" draggable="${!activeBatch()}" data-drag-file="${esc(fid)}"><td class="qp-check-cell"><input type="checkbox" data-check-file="${esc(fid)}" ${state.checked.has(fid) ? 'checked' : ''} ${invalid || activeBatch() ? 'disabled' : ''} aria-label="打印 ${esc(f.name)}"></td><td class="qp-number-cell">${String(all.findIndex(item => item.id === fid) + 1).padStart(2, '0')}</td><td><button class="qp-file-open" data-file="${esc(fid)}" title="${esc(f.path || f.relativePath)}">${icon(f.kind === 'image' ? 'image' : 'file-text')}<span><span class="qp-file-name">${esc(f.name)}</span>${invalid ? `<small class="qp-file-error-message">${esc(f.error || '文件页数尚不可用')}</small>` : ''}</span></button></td><td class="qp-copies-cell"><input class="qp-row-copies" data-file-copies="${esc(fid)}" type="number" min="1" max="100" step="1" value="${copies}" ${invalid || busy || activeBatch() ? 'disabled' : ''} aria-label="${esc(f.name)} 的基础份数" title="本行 ${copies} 份 × 全局 ${state.quantity} ${state.quantityMode === 'sets' ? '套' : '份'} = 共 ${copies * state.quantity} 份"></td><td class="qp-pages-cell">${f.pages || '—'}</td><td class="qp-state-cell ${invalid ? 'qp-file-error' : custom || inherited ? 'qp-overridden' : 'qp-inherited'}">${invalid ? '不可打印' : custom ? '自定义' : inherited ? '文件夹' : '默认'}</td></tr>`;
+      return `<tr class="qp-file-row${state.selected === fid && state.focusType === 'file' ? ' is-selected' : ''}${invalid ? ' has-error' : ''}" draggable="${!activeBatch()}" data-drag-file="${esc(fid)}"><td class="qp-check-cell"><input type="checkbox" data-check-file="${esc(fid)}" ${state.checked.has(fid) ? 'checked' : ''} ${invalid || activeBatch() ? 'disabled' : ''} aria-label="打印 ${esc(f.name)}"></td><td class="qp-number-cell">${String(all.findIndex(item => item.id === fid) + 1).padStart(2, '0')}</td><td><button class="qp-file-open" data-file="${esc(fid)}" title="${esc(f.path || f.relativePath)}">${icon(f.kind === 'image' ? 'image' : 'file-text')}<span><span class="qp-file-name">${esc(f.name)}</span>${invalid ? `<small class="qp-file-error-message">${esc(f.error || '文件页数尚不可用')}</small>` : ''}</span></button></td><td class="qp-copies-cell"><input class="qp-row-copies" data-file-copies="${esc(fid)}" type="number" min="1" max="100" step="1" value="${copies}" ${invalid || busy || activeBatch() ? 'disabled' : ''} aria-label="${esc(f.name)} 的基础份数" title="本行 ${copies} 份 × 全局 ${state.quantity} ${state.quantityMode === 'sets' ? '套' : '份'} = 共 ${copies * state.quantity} 份"></td><td class="qp-pages-cell">${f.pages || '—'}</td><td class="qp-state-cell ${invalid ? 'qp-file-error' : custom || inherited ? 'qp-overridden' : 'qp-inherited'}">${invalid ? '不可打印' : custom ? '自定义' : inherited ? '文件夹' : '默认'}</td><td class="qp-remove-cell"><button class="qp-remove-item" type="button" data-remove-file="${esc(fid)}" ${busy || activeBatch() ? 'disabled' : ''} aria-label="移出文件 ${esc(f.name)}" title="从清单移出 ${esc(f.name)}，原文件保留">${icon('minus')}</button></td></tr>`;
     }).join('');
   }
   function walk(id, depth) {
     folder(id).folderIds.forEach(gid => {
       const g = folder(gid), eligible = descendantFiles(gid).filter(isValidFile), checked = eligible.filter(f => state.checked.has(f.id)).length, collapsed = state.collapsed.has(gid);
-      html += `<tr class="qp-folder-row${depth ? ' qp-subfolder' : ''}" draggable="${!activeBatch()}" data-drag-folder="${esc(gid)}"><td colspan="6"><div class="qp-folder-heading" style="padding-left:${Math.min(depth, 5) * 17 + 2}px"><input type="checkbox" data-check-folder="${esc(gid)}" ${eligible.length && checked === eligible.length ? 'checked' : ''} ${!eligible.length || activeBatch() ? 'disabled' : ''} aria-label="选择 ${esc(g.name)} 的全部文件"><span class="qp-drag-handle">${icon('grip-vertical')}</span><button data-collapse="${esc(gid)}" aria-label="${collapsed ? '展开' : '折叠'} ${esc(g.name)}">${icon(collapsed ? 'chevron-right' : 'chevron-down')}</button><button data-folder="${esc(gid)}" title="${esc(g.relativePath)}">${icon('folder')}<span>${esc(g.name)}</span></button><small>${descendantFiles(gid).length} 个文件</small></div></td></tr>`;
+      html += `<tr class="qp-folder-row${depth ? ' qp-subfolder' : ''}" draggable="${!activeBatch()}" data-drag-folder="${esc(gid)}"><td colspan="7"><div class="qp-folder-heading" style="padding-left:${Math.min(depth, 5) * 17 + 2}px"><input type="checkbox" data-check-folder="${esc(gid)}" ${eligible.length && checked === eligible.length ? 'checked' : ''} ${!eligible.length || activeBatch() ? 'disabled' : ''} aria-label="选择 ${esc(g.name)} 的全部文件"><span class="qp-drag-handle">${icon('grip-vertical')}</span><button data-collapse="${esc(gid)}" aria-label="${collapsed ? '展开' : '折叠'} ${esc(g.name)}">${icon(collapsed ? 'chevron-right' : 'chevron-down')}</button><button data-folder="${esc(gid)}" title="${esc(g.relativePath)}">${icon('folder')}<span>${esc(g.name)}</span></button><small>${descendantFiles(gid).length} 个文件</small><button class="qp-remove-item" type="button" data-remove-folder="${esc(gid)}" ${busy || activeBatch() ? 'disabled' : ''} aria-label="移出文件夹 ${esc(g.name)} 及全部内容" title="从清单移出 ${esc(g.name)} 及其子文件夹中的全部文件，原文件保留">${icon('minus')}</button></div></td></tr>`;
       if (!collapsed) { html += fileRows(gid); walk(gid, depth + 1); }
     });
   }
@@ -89,10 +89,19 @@ function renderRows() {
   $('#qp-check-all').indeterminate = selected.length > 0 && selected.length < eligible.length;
   $('#qp-check-all').disabled = !eligible.length || activeBatch();
   $('#qp-empty-state').hidden = all.length > 0;
-  $('#qp-remove-button').disabled = !all.length || activeBatch();
+  renderRemoveControls();
   $('#qp-list-caption').textContent = all.length ? `${all.length} 个文件 · ${selected.length} 个已勾选 · 按清单顺序打印` : '导入文件夹或添加文件开始';
 }
+function renderRemoveControls() {
+  const locked = busy || activeBatch();
+  const target = state.focusType === 'folder' ? folder(state.focusedFolder) : file(state.selected);
+  $('#qp-remove-button').disabled = locked || !target;
+  $('#qp-remove-button').title = target ? `从清单移出 ${target.name}${state.focusType === 'folder' ? ' 及全部内容' : ''}，原文件保留` : '先选择要移出的文件或文件夹';
+  $$('[data-remove-file],[data-remove-folder]').forEach(button => { button.disabled = locked; });
+  $('#qp-preview-remove-file').disabled = locked || !file(state.selected);
+}
 function renderSettings() {
+  renderRemoveControls();
   const s = activeSettings(), f = file(state.selected), g = folder(state.focusedFolder), printer = activePrinter();
   $('[data-setting="paper"]').innerHTML = supportedPapers(printer).map(paper => `<option value="${esc(paper.value)}">${esc(paper.label)}</option>`).join('');
   $$('[data-scope]').forEach(b => { b.setAttribute('aria-pressed', String(b.dataset.scope === state.scope)); b.disabled = (b.dataset.scope === 'file' && !f) || (b.dataset.scope === 'folder' && !g) || activeBatch(); });
@@ -249,16 +258,39 @@ async function importItems(kind, droppedFiles = []) {
   finally { busy = false; runtime(importWarningText); render(); }
 }
 function removeFocused() {
-  if (activeBatch()) return;
-  const removeIds = state.focusType === 'folder' ? descendantFiles(state.focusedFolder).map(f => f.id) : state.selected ? [state.selected] : [];
-  if (!removeIds.length) { announce('先选中要移出的文件或文件夹'); return; }
-  const preserved = files().filter(f => !removeIds.includes(f.id));
-  removeIds.forEach(id => { state.checked.delete(id); delete state.fileOverrides[id]; });
+  const type = state.focusType === 'folder' ? 'folder' : 'file';
+  const id = type === 'folder' ? state.focusedFolder : state.selected;
+  if (!id) { announce('先选中要移出的文件或文件夹'); return; }
+  removeItem(type, id);
+}
+function removeItem(type, id) {
+  if (busy || activeBatch()) return;
+  const target = type === 'folder' ? folder(id) : file(id);
+  if (!target) return;
+  const removed = new Set(type === 'folder' ? descendantFiles(id).map(f => f.id) : [id]);
+  if (!removed.size) return;
+  const before = files(), index = Math.max(0, before.findIndex(f => f.id === state.selected));
+  const preserved = before.filter(f => !removed.has(f.id));
+  const next = before.slice(index).find(f => !removed.has(f.id)) || before.slice(0, index).reverse().find(f => !removed.has(f.id));
+  removed.forEach(fid => { state.checked.delete(fid); delete state.fileOverrides[fid]; });
   const old = tree;
   tree = buildTree(preserved);
   Object.values(tree.folders).forEach(g => { const previous = old.folders[g.id]; if (previous) { g.folderIds.sort((a, b) => previous.folderIds.indexOf(a) - previous.folderIds.indexOf(b)); g.fileIds.sort((a, b) => previous.fileIds.indexOf(a) - previous.fileIds.indexOf(b)); } });
-  state.selected = files()[0]?.id || null; state.focusedFolder = file(state.selected)?.parentId || null; state.focusType = 'file'; state.scope = 'batch';
-  update(); if (state.view === 'preview') renderPreview(); announce(`已从清单移出 ${removeIds.length} 个文件，原文件保留`);
+  for (const gid of Object.keys(state.folderOverrides)) if (!folder(gid)) delete state.folderOverrides[gid];
+  state.collapsed = new Set([...state.collapsed].filter(gid => folder(gid)));
+  const keepFolderContext = (state.focusType === 'folder' || state.scope === 'folder') && folder(state.focusedFolder);
+  if (!file(state.selected)) {
+    state.selected = (keepFolderContext ? descendantFiles(state.focusedFolder)[0]?.id : null) || next?.id || null;
+  }
+  if (!keepFolderContext) {
+    const lostFolderScope = state.scope === 'folder' && !folder(state.focusedFolder);
+    state.focusedFolder = file(state.selected)?.parentId || null;
+    if (state.focusType !== 'all') state.focusType = state.selected ? 'file' : 'all';
+    if (lostFolderScope) state.scope = state.selected ? 'file' : 'batch';
+  }
+  if (!state.selected) { state.focusType = 'all'; state.scope = 'batch'; state.focusedFolder = null; }
+  update();
+  announce(type === 'folder' ? `已移出文件夹「${target.name}」及其中 ${removed.size} 个文件，原文件保留` : `已从清单移出「${target.name}」，原文件保留`);
 }
 
 function renderPreview() {
@@ -448,6 +480,8 @@ function setQuantity(value) { state.quantity = Math.min(100, Math.max(1, Math.ro
 root.addEventListener('click', async event => {
   const button = event.target.closest('button'); if (!button || button.disabled) return;
   try {
+    if (button.dataset.removeFile) { removeItem('file', button.dataset.removeFile); return; }
+    if (button.dataset.removeFolder) { removeItem('folder', button.dataset.removeFolder); return; }
     if (button.dataset.file) { focusFile(button.dataset.file); return; }
     if (button.dataset.folder) { focusFolder(button.dataset.folder); return; }
     if (button.dataset.collapse) { const id = button.dataset.collapse; state.collapsed.has(id) ? state.collapsed.delete(id) : state.collapsed.add(id); renderRows(); icons(); return; }
@@ -458,6 +492,7 @@ root.addEventListener('click', async event => {
     else if (action === 'view-list' || action === 'view-preview') { state.view = action === 'view-list' ? 'list' : 'preview'; renderTotals(); if (state.view === 'preview') renderPreview(); }
     else if (action === 'move-up' || action === 'move-down') moveFocused(action === 'move-up' ? -1 : 1);
     else if (action === 'remove-selected') removeFocused();
+    else if (action === 'remove-preview-file') removeItem('file', state.selected);
     else if (action === 'restore') { if (state.scope === 'file') delete state.fileOverrides[state.selected]; else if (state.scope === 'folder') delete state.folderOverrides[state.focusedFolder]; update(); announce('已恢复继承上级设置'); }
     else if (action === 'quantity-up' || action === 'quantity-down') setQuantity(state.quantity + (action === 'quantity-up' ? 1 : -1));
     else if (action === 'show-order') showOrder();
@@ -491,7 +526,7 @@ root.addEventListener('change', event => {
   else if (el.id === 'qp-preview-page-number') setPreviewPage(el.value);
 });
 root.addEventListener('dragstart', event => {
-  if (busy || activeBatch() || event.target.closest('input,select')) { event.preventDefault(); return; }
+  if (busy || activeBatch() || event.target.closest('input,select,[data-remove-file],[data-remove-folder]')) { event.preventDefault(); return; }
   const row = event.target.closest('[data-drag-file],[data-drag-folder]'); if (!row) return;
   dragged = row.dataset.dragFile ? { type: 'file', id: row.dataset.dragFile } : { type: 'folder', id: row.dataset.dragFolder };
   event.dataTransfer.setData(INTERNAL_DRAG_TYPE, JSON.stringify(dragged)); event.dataTransfer.effectAllowed = 'move';

@@ -8,7 +8,7 @@
 
 面向 Windows 的本地批量打印工具。混合导入 PDF 与图片，保留子文件夹分组，核对顺序后一次提交。
 
-[![Version](https://img.shields.io/badge/version-0.1.7-4564e8?style=flat-square)](https://github.com/Mechanic707/QueuePrint/releases)
+[![Version](https://img.shields.io/badge/version-0.1.8-4564e8?style=flat-square)](https://github.com/Mechanic707/QueuePrint/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078d4?style=flat-square)](#安装与启动)
 [![License](https://img.shields.io/badge/license-MIT-258a69?style=flat-square)](LICENSE)
 [![Tests](https://img.shields.io/badge/Node%20tests-80%20passed-258a69?style=flat-square)](#测试与验证)
@@ -38,6 +38,7 @@
 | 去重与导入提示 | 重复路径去重，合并重叠的父子目录选择；显示跳过格式及读取问题 |
 | 稳定顺序 | 本级文件在前、子目录在后；同层按 `1、2、10` 自然排序 |
 | 手动调整 | 文件在组内排序，文件夹在同级整组移动 |
+| 清单移出 | 文件、文件夹行右侧用“−”移出；文件夹包含所有下级条目，源文件保留 |
 | 单文件多份 | 清单内直接编辑份数，范围为 1–100 |
 | 成套与逐文件打印 | 支持“整批成套”和“逐文件多份”，明确展示份数乘法与最终顺序 |
 | 打印机与常用属性 | 选择 Windows 打印队列，设置纸张、方向、色彩、单双面和缩放 |
@@ -70,30 +71,38 @@
 在 [Releases](https://github.com/Mechanic707/QueuePrint/releases/latest) 下载 Windows x64 免安装包：
 
 ```text
-QueuePrint-0.1.7-win-x64.exe
+QueuePrint-0.1.8-win-x64.exe
 ```
 
 打开即可使用。发布包已包含 Electron、本地打印助手及所需 .NET 运行时，使用软件无需安装 Node.js 或 .NET SDK。打印机需要先在 Windows 中安装相应驱动。
 
 | 下载项 | 说明 |
 | --- | --- |
-| [QueuePrint-0.1.7-win-x64.exe](https://github.com/Mechanic707/QueuePrint/releases/download/v0.1.7/QueuePrint-0.1.7-win-x64.exe) | Windows x64 免安装程序 |
-| [SHA256SUMS.txt](https://github.com/Mechanic707/QueuePrint/releases/download/v0.1.7/SHA256SUMS.txt) | 发行文件的 SHA-256 校验值 |
+| [QueuePrint-0.1.8-win-x64.exe](https://github.com/Mechanic707/QueuePrint/releases/download/v0.1.8/QueuePrint-0.1.8-win-x64.exe) | Windows x64 免安装程序 |
+| [SHA256SUMS.txt](https://github.com/Mechanic707/QueuePrint/releases/download/v0.1.8/SHA256SUMS.txt) | 发行文件的 SHA-256 校验值 |
 
-当前发行包未做代码签名，可通过 `Get-FileHash .\QueuePrint-0.1.7-win-x64.exe -Algorithm SHA256` 核对发布页中的校验值。
+当前发行包未做代码签名，可通过 `Get-FileHash .\QueuePrint-0.1.8-win-x64.exe -Algorithm SHA256` 核对发布页中的校验值。
 
 如使用目录版，运行 `win-unpacked/序印 QueuePrint.exe`，并保留整个 `win-unpacked` 目录。升级时先关闭旧版本，再运行新版本。
 
 ## 快速开始
 
 1. **导入材料**：点击“导入文件夹”或“添加文件”，也可从资源管理器直接拖入文件夹与文件。
-2. **核对清单**：检查目录分组、勾选范围、页数与顺序。清单中的顺序就是软件提交任务的顺序。
+2. **核对清单**：检查目录分组、勾选范围、页数与顺序。清单中的顺序就是软件提交任务的顺序；误拖入的条目可点击行右侧“−”移出。
 3. **设置份数**：需要额外份数的文件，直接修改对应行的“份/套”；右侧设置整批套数。
 4. **选择打印机**：设置纸张、方向、黑白/彩色、单双面与缩放。纸张及能力选项来自当前驱动。
 5. **查看出纸顺序**：逐项核对套数、每文件份数与双面边界。
 6. **确认并打印**：点击“开始打印”，核对确认窗口，再点击“确认并打印”提交到真实打印机。
 
 勾选决定文件是否打印；点击文件决定查看谁的属性。修改某个文件的份数或预览内容，不会自动改变它的勾选状态。
+
+## 移出误添加的文件与文件夹
+
+- **移出单个文件**：点击文件行右侧的“−”，只移出这一项，无需先勾选或打开文件。
+- **移出整个文件夹**：点击文件夹行右侧的“−”，同时移出该文件夹内的文件和全部子文件夹。
+- **在预览中移出**：点击预览工具栏的“−”，移出当前预览的文件，并切换到剩余文件。
+
+这些操作只修改本次打印清单，原始文件和文件夹保留在磁盘上，可以重新拖入。左侧勾选框仍用于决定是否打印；行右侧“−”用于移出对应条目。移出后，清单顺序、页数和预计用纸会同步更新。导入或打印过程中，移出操作暂不可用。
 
 ## 预览、缩放与切换文件
 
@@ -110,7 +119,7 @@ QueuePrint-0.1.7-win-x64.exe
 
 查看比例与右侧“页面缩放”分别控制屏幕显示大小和打印内容在纸上的大小。驱动可打印区域通过只读查询获得；查询失败时明确显示纸张排版示意，尚未计入硬件边距。
 
-预览操作只改变查看方式，不修改打印勾选、份数、打印页码或右侧的打印缩放设置。PDF 与图片切换、快速连续缩放会取消旧任务；同路径文件更新并重新导入后会刷新预览缓存。大页面使用受限的预览栅格分辨率，保持请求的显示尺寸，并在需要时显示清晰度提示。
+翻页、缩放和切换预览文件只改变查看方式，不修改打印勾选、份数、打印页码或右侧的打印缩放设置。预览工具栏的“−”用于将当前文件移出清单。PDF 与图片切换、快速连续缩放会取消旧任务；同路径文件更新并重新导入后会刷新预览缓存。大页面使用受限的预览栅格分辨率，保持请求的显示尺寸，并在需要时显示清晰度提示。
 
 ## 文件夹与排序规则
 
@@ -301,6 +310,7 @@ npm.cmd run dist
 | `npm.cmd run qa:fixtures` | 在 `.qa/fixtures` 创建自建样例文件 |
 | `npm.cmd run qa:desktop` | 检查实际 Electron 导入、预览与确认界面 |
 | `npm.cmd run qa:enhancements` | 检查资源管理器拖放、去重及单文件多份 |
+| `npm.cmd run qa:remove` | 检查文件／文件夹移出、预览衔接、剩余清单状态及源文件保留，不提交打印作业 |
 | `npm.cmd run docs:screenshots` | 使用示例设备和自建文件重新生成文档截图 |
 
 ## 测试与验证
@@ -311,7 +321,7 @@ npm.cmd run dist
 npm.cmd test
 ```
 
-桌面检查使用自建文件和隔离偏好目录，验证真实 Electron 程序中的文件夹导入、PDF/图片预览、份数计算、确认窗口、拖放及自由缩放。文件进度检查使用模拟提交回执，检查每个文件结束时弹窗及清单位置稳定；纸张预览检查覆盖 A4/A3/A5、硬件边距、实际大小裁切、混合页方向、图片 DPI、最小窗口和驱动响应延迟。这些桌面检查不提交打印作业。另有 `qa:print-output`：通过真实 `PrintDocument.Print()` 向 **Microsoft Print to PDF** 提交自建 PDF/PNG，输出限定在 `.qa/` 内，检查实际生成页面的纸向、尺寸及四角标记；不向实体设备发送作业。
+桌面检查使用自建文件和隔离偏好目录，验证真实 Electron 程序中的文件夹导入、PDF/图片预览、份数计算、确认窗口、拖放及自由缩放。文件进度检查使用模拟提交回执，检查每个文件结束时弹窗及清单位置稳定；纸张预览检查覆盖 A4/A3/A5、硬件边距、实际大小裁切、混合页方向、图片 DPI、最小窗口和驱动响应延迟。移出检查覆盖文件、嵌套文件夹、预览切换、重新导入和打印期间的操作限制，并核对源文件仍在磁盘上。这些桌面检查不提交打印作业。另有 `qa:print-output`：通过真实 `PrintDocument.Print()` 向 **Microsoft Print to PDF** 提交自建 PDF/PNG，输出限定在 `.qa/` 内，检查实际生成页面的纸向、尺寸及四角标记；不向实体设备发送作业。
 
 Playwright 已作为开发依赖锁定，`npm ci` 后即可运行桌面检查，无需额外下载浏览器。检查会启动实际 Electron 窗口；完整确认流程测试需要 Windows 中至少安装一个打印队列，例如系统的虚拟 PDF 打印机。
 
@@ -319,6 +329,7 @@ Playwright 已作为开发依赖锁定，`npm ci` 后即可运行桌面检查，
 npm.cmd run qa:fixtures
 npm.cmd run qa:desktop
 npm.cmd run qa:enhancements
+npm.cmd run qa:remove
 npm.cmd run qa:progress
 npm.cmd run qa:preview
 npm.cmd run qa:paper-preview
@@ -368,6 +379,15 @@ QueuePrint/
 界面将勾选、排序和属性交给核心模块生成明确计划；主进程核对已导入文件并有序提交；原生助手通过 Windows 打印 API 与 PDFium 完成逐页渲染。原生协议与命令说明见 [native/README.md](native/README.md)。
 
 ## 更新记录
+
+### v0.1.8
+
+- 文件和文件夹行右侧新增“−”按钮，直接移出误添加的条目；移出文件夹时包含所有下级文件与子文件夹。
+- 预览工具栏新增“−”，可移出当前文件并继续查看剩余内容。
+- 移出只影响打印清单，保留磁盘上的原文件；剩余文件的顺序、勾选和独立设置继续保留，统计同步更新。
+- 导入及打印期间锁定移出操作，并增加不提交打印作业的 Electron 回归检查。
+
+
 
 ### v0.1.7
 

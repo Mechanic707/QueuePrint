@@ -47,3 +47,11 @@
   #queueprint-design #qp-paper-stage{padding:12px;margin-top:2px}
   #queueprint-design .qp-preview-print-note{min-height:28px;padding-top:4px}
 }
+
+/* A minus always removes its own file/folder from this print list. */
+#queueprint-design .qp-file-table .qp-remove-cell{width:31px;text-align:right;padding-right:0}
+#queueprint-design .qp-remove-item,#queueprint-design .qp-folder-heading .qp-remove-item{display:inline-flex;align-items:center;justify-content:center;flex:0 0 26px;width:26px;height:26px;border:1px solid var(--qp-line);border-radius:5px;padding:4px;background:transparent;color:var(--qp-muted)}
+#queueprint-design .qp-remove-item svg,#queueprint-design .qp-folder-heading .qp-remove-item svg{width:14px;height:14px;color:inherit;stroke-width:2}
+#queueprint-design .qp-remove-item:hover:not(:disabled),#queueprint-design .qp-folder-heading .qp-remove-item:hover:not(:disabled){color:light-dark(#b33c36,#ffaaa1);border-color:currentColor;background:light-dark(#fff4f2,#3b2727)}
+#queueprint-design .qp-remove-item:disabled{cursor:default;opacity:.35}
+#queueprint-design .qp-folder-heading .qp-remove-item{margin-left:4px}

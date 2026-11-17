@@ -79,6 +79,13 @@ jobs:
           $env:QUEUEPRINT_QA_EXE = Join-Path (Get-Location) 'release\win-unpacked\序印 QueuePrint.exe'
           npm.cmd run qa:paper-preview
           if ($LASTEXITCODE -ne 0) { throw 'Paper layout preview checks failed.' }
+      - name: Verify file and folder removal without deleting sources
+        if: inputs.verify_existing != true
+        shell: pwsh
+        run: |
+          $env:QUEUEPRINT_QA_EXE = Join-Path (Get-Location) 'release\win-unpacked\序印 QueuePrint.exe'
+          npm.cmd run qa:remove
+          if ($LASTEXITCODE -ne 0) { throw 'File and folder removal checks failed.' }
       - name: Verify repeated portable launches
         run: npm.cmd run qa:portable
       - name: Verify lowercase Windows temporary paths

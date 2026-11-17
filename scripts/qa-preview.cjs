@@ -214,7 +214,8 @@ async function writePdf(file, colors, size) {
     await page.locator('[data-action="view-preview"]').click();
     await choose(a, 'teal'); await page.locator('#qp-preview-fit-page').click(); await settled(a);
     const screenshot = path.join(output, 'preview-navigation.png'); await page.screenshot({ path: screenshot }); report.screenshots.push(path.relative(root, screenshot).replaceAll('\\', '/'));
-    await choose(b, 'purple'); await page.locator('[data-action="remove-selected"]').click(); await settled(a); await color('teal');
+    await choose(b, 'purple'); await page.locator('[data-action="remove-selected"]').click(); await settled(photo);
+    await page.locator('#qp-image-preview').waitFor({ state: 'visible' });
     assert.equal(await picker.locator('option').count(), 3);
     await page.locator('[data-folder]').filter({ hasText: '预览样例' }).first().click();
     await page.locator('[data-action="remove-selected"]').click();
